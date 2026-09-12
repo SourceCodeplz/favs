@@ -7,93 +7,26 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#202124">
-<style>
-  :root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --text: #202124;
-    --text-muted: #5f6368;
-    --field-bg: #ffffff;
-    --field-border: #dfe1e5;
-    --field-text: #202124;
-    --placeholder: #5f6368;
-    --button-bg: #4285f4;
-    --button-border: #4285f4;
-    --button-text: #ffffff;
-    --shadow: 0 1px 6px rgba(32, 33, 36, 0.28);
-    --focus-border: #4285f4;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #202124;
-      --text: #e8eaed;
-      --text-muted: #9aa0a6;
-      --field-bg: #303134;
-      --field-border: #5f6368;
-      --field-text: #e8eaed;
-      --placeholder: #9aa0a6;
-      --button-bg: #8ab4f8;
-      --button-border: #8ab4f8;
-      --button-text: #202124;
-      --shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
-      --focus-border: #8ab4f8;
-    }
-  }
-
-  * { box-sizing: border-box; }
-
-  html, body { height: 100%; }
-
-  html { background-color: #ffffff; }
-
-  @media (prefers-color-scheme: dark) {
-    html { background-color: #202124; }
-  }
-
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    margin: 0;
-    background-color: var(--bg);
-    color: var(--text);
-  }
-
-  h1 { font-size: 2rem; margin: 0 0 1.5rem; font-weight: 600; letter-spacing: 0.01em; color: var(--text); }
-  form { display: flex; width: min(90vw, 500px); }
-  input {
-    flex: 1;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    color: var(--field-text);
-    background-color: var(--field-bg);
-    border: 1px solid var(--field-border);
-    border-radius: 24px 0 0 24px;
-    outline: none;
-  }
-  input::placeholder { color: var(--placeholder); opacity: 1; }
-  input:focus { border-color: var(--focus-border); }
-  form:focus-within { filter: drop-shadow(var(--shadow)); }
-  button {
-    padding: 0 1.25rem;
-    border: 1px solid var(--button-border);
-    background: var(--button-bg);
-    color: var(--button-text);
-    border-radius: 0 24px 24px 0;
-    cursor: pointer;
-    font-size: 1rem;
-  }
-</style>
+<script>
+  // Apply saved theme before CSS to avoid a flash. Keep in sync with app.js.
+  try {
+    var s = JSON.parse(localStorage.getItem('favs.settings.v1') || '{}');
+    if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="styles.css?v=1">
 </head>
-<body>
-  <h1>favs.eu.org</h1>
-  <form action="https://www.google.com/search" method="GET">
-    <input type="text" name="q" placeholder="Search Google..." autofocus>
+<body class="home">
+  <div class="topbar">
+    <a class="icon-btn" href="settings.html?v=1" title="Settings" aria-label="Settings">&#9881;</a>
+  </div>
+  <h1 class="site-title" id="siteTitle">favs.eu.org</h1>
+  <form class="search-row" id="searchForm" action="https://www.google.com/search" method="GET">
+    <input id="searchInput" type="text" name="q" placeholder="Search Google..." autofocus>
+    <select class="engine-select" id="engineSelect" hidden aria-label="Search engine"></select>
     <button type="submit">Search</button>
   </form>
+  <nav class="bookmarks" id="bookmarks" hidden aria-label="Bookmarks"></nav>
+  <script src="app.js?v=1"></script>
 </body>
 </html>

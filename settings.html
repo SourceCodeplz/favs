@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — FAVS</title>
+<meta name="color-scheme" content="light dark">
+<script>
+  // Apply saved theme before CSS to avoid a flash. Keep in sync with settings.js.
+  try {
+    var s = JSON.parse(localStorage.getItem('favs.settings.v1') || '{}');
+    if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="settings.css?v=1">
+</head>
+<body class="settings-body">
+  <header class="settings-topbar">
+    <a class="back" href="index.html?v=1">&larr; Start page</a>
+    <h1>Settings</h1>
+  </header>
+  <div class="settings-layout">
+    <nav class="settings-nav" aria-label="Settings sections">
+      <button type="button" data-section="general" aria-selected="true">General</button>
+      <button type="button" data-section="appearance" aria-selected="false">Appearance</button>
+      <button type="button" data-section="engines" aria-selected="false">Search engines</button>
+      <button type="button" data-section="bookmarks" aria-selected="false">Bookmarks</button>
+    </nav>
+    <main class="settings-content">
+      <section class="settings-section" data-section-panel="general">
+        <h2>General</h2>
+        <p class="desc">Basic start-page preferences.</p>
+        <div class="card">
+          <div class="field">
+            <label class="label" for="siteName">Site name</label>
+            <input type="text" id="siteName" maxlength="60" placeholder="favs.eu.org">
+          </div>
+        </div>
+        <div class="card">
+          <div class="field">
+            <label class="label">Reset</label>
+            <div class="btn-row">
+              <button class="btn danger" id="resetAll" type="button">Reset all settings</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section" data-section-panel="appearance" hidden>
+        <h2>Appearance</h2>
+        <p class="desc">Override the automatic light / dark mode.</p>
+        <div class="card">
+          <label class="radio-row"><input type="radio" name="theme" value="system"> System (follow browser)</label>
+          <label class="radio-row"><input type="radio" name="theme" value="light"> Light</label>
+          <label class="radio-row"><input type="radio" name="theme" value="dark"> Dark</label>
+        </div>
+      </section>
+
+      <section class="settings-section" data-section-panel="engines" hidden>
+        <h2>Search engines</h2>
+        <p class="desc">Enable the engines you want. If more than one is enabled, a dropdown appears on the start page to pick one per search.</p>
+        <div class="card">
+          <div class="engine-list" id="engineList"></div>
+        </div>
+        <div class="card">
+          <div class="field">
+            <label class="label" for="defaultEngine">Default engine</label>
+            <select id="defaultEngine"></select>
+          </div>
+          <p class="desc" id="engineHint"></p>
+        </div>
+      </section>
+
+      <section class="settings-section" data-section-panel="bookmarks" hidden>
+        <h2>Bookmarks</h2>
+        <p class="desc">Chrome-style bookmarks shown on the start page.</p>
+        <div class="card">
+          <div class="field">
+            <label class="label" for="bookmarkTitle">Title</label>
+            <input type="text" id="bookmarkTitle" maxlength="80" placeholder="My favorite site">
+          </div>
+          <div class="field">
+            <label class="label" for="bookmarkUrl">URL</label>
+            <input type="url" id="bookmarkUrl" placeholder="https://example.com">
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="bookmarkAdd" type="button">Add bookmark</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="desc" id="bookmarkEmpty">No bookmarks yet. Add your first one above.</p>
+          <div id="bookmarkList"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="settings.js?v=1"></script>
+</body>
+</html>

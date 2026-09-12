@@ -1,0 +1,208 @@
+/* Settings page layout. Shared variables live in styles.css. */
+.settings-body {
+  display: block;
+  min-height: 100vh;
+}
+
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--card-border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.settings-topbar a.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.settings-topbar a.back:hover { text-decoration: underline; }
+
+.settings-topbar h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  max-width: 960px;
+  margin: 0 auto;
+  min-height: calc(100vh - 53px);
+}
+
+.settings-nav {
+  border-right: 1px solid var(--card-border);
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.settings-nav button {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.settings-nav button:hover { background: var(--card-bg); }
+
+.settings-nav button[aria-selected="true"] {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  font-weight: 600;
+}
+
+.settings-content {
+  padding: 1.5rem;
+  min-width: 0;
+}
+
+.settings-section[hidden] { display: none; }
+
+.settings-section h2 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+.settings-section p.desc {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.field { margin-bottom: 1rem; }
+.field:last-child { margin-bottom: 0; }
+
+.field label.label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.field input[type="text"],
+.field input[type="url"],
+.field select {
+  width: 100%;
+  max-width: 420px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--field-text);
+  outline: none;
+}
+
+.field input:focus, .field select:focus { border-color: var(--focus-border); }
+
+.radio-row, .check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.engine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.engine-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+}
+
+.engine-item:hover { background: var(--bg); }
+
+.btn {
+  display: inline-block;
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--card-border);
+}
+
+.btn.danger {
+  background: transparent;
+  color: #d93025;
+  border-color: #d93025;
+}
+
+.btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.92rem;
+}
+
+.bookmark-row:last-child { border-bottom: none; }
+
+.bookmark-row img { width: 20px; height: 20px; border-radius: 4px; }
+
+.bookmark-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-row .grow small { display: block; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.toast.show { opacity: 1; }
+
+@media (max-width: 700px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .settings-nav button { white-space: nowrap; }
+}
