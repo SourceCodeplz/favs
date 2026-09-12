@@ -18,7 +18,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body class="home">
   <div class="topbar">
@@ -45,6 +45,7 @@
       </div>
       <div class="chat-head-actions">
         <a class="chat-model-link" href="settings.html#model">Change</a>
+        <button type="button" class="chat-clear-btn" id="chatFolder" title="Attach a folder for the coding agent (runs bash locally in a sandbox)">Folder</button>
         <button type="button" class="chat-clear-btn" id="chatClear" hidden>Clear</button>
         <button type="button" class="chat-load-btn" id="chatLoad">Download &amp; start</button>
       </div>
@@ -54,6 +55,7 @@
     <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
   </section>
   <script src="app.js?v=5"></script>
-  <script type="module" src="chat.js?v=4"></script>
+  <script type="module" src="agent.js?v=1"></script>
+  <script type="module" src="chat.js?v=5"></script>
 </body>
 </html>

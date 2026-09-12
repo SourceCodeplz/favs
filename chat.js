@@ -51,6 +51,24 @@
 
   var MAX_HISTORY = 24; // messages (excluding system) sent to the model
   var SYSTEM_PROMPT = 'You are a helpful assistant running locally in the user\'s browser. Keep answers concise. The user may ask you to rewrite or transform pasted text — return the rewritten text first, then a short note.';
+  // Agent mode (single native tool). Active when a folder is attached via
+  // agent.js — the sandbox shell sees the folder at /workspace.
+  var MAX_AGENT_ITERS = 8; // tool steps per user message
+  var AGENT_SYSTEM_PROMPT = 'You are a local coding agent running in the user\'s browser. You have one tool: execute_bash, a POSIX shell (bash + coreutils: ls, cat, grep, find, sed, awk, cp, mv) inside a sandbox. The user\'s picked folder is mounted at /workspace — always work there, never invent paths outside it. Explore before editing (ls, cat, grep). Make small, verifiable changes; re-run checks (e.g. ls, grep) to confirm. Keep each command short and its output small (pipe through head). File edits persist to the user\'s real folder, so say what you changed. When done, summarize the changes and how to verify. If the task needs no shell, just answer directly.';
+  var EXECUTE_BASH_TOOL = {
+    type: 'function',
+    function: {
+      name: 'execute_bash',
+      description: 'Run a POSIX shell command in the sandboxed workspace (/workspace = the user\'s picked folder). Has ls, cat, grep, find, sed, awk, cp, mv. Returns exit code, stdout and stderr. File changes persist to the user\'s folder.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: 'Shell command to run, e.g. "ls -la /workspace" or "grep -rn TODO /workspace --include=*.js | head -30"' }
+        },
+        required: ['command']
+      }
+    }
+  };
   var CTX_OPTIONS = [2048, 4096, 8192, 16384, 32768];
 
   var state = 'idle'; // idle | loading | ready | generating
@@ -204,8 +222,198 @@
   function modelMessages() {
     var msgs = [{ role: 'system', content: SYSTEM_PROMPT }];
     var tail = history.slice(-MAX_HISTORY);
+    for (var i = 0; i < tail.length; i++) {
+      var m = tail[i];
+      // Agent turns leave tool_calls/tool messages behind; plain chat
+      // accepts only plain user/assistant text (e.g. after detaching).
+      if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
+      msgs.push({ role: m.role, content: typeof m.content === 'string' ? m.content : '' });
+    }
+    return msgs;
+  }
+
+  function agentMessages() {
+    var msgs = [{ role: 'system', content: AGENT_SYSTEM_PROMPT }];
+    var tail = history.slice(-MAX_HISTORY);
     for (var i = 0; i < tail.length; i++) msgs.push(tail[i]);
     return msgs;
+  }
+
+  function isAgentReady() {
+    try {
+      return !!(window.favsAgent && window.favsAgent.isReady());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function parseToolArgs(raw) {
+    if (raw == null) return {};
+    if (typeof raw === 'object') return raw;
+    try {
+      return JSON.parse(String(raw)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function addToolBubble(command, result) {
+    var box = $('chatMessages');
+    if (!box) return null;
+    var div = document.createElement('div');
+    div.className = 'chat-msg tool';
+    var head = document.createElement('div');
+    head.className = 'chat-tool-cmd';
+    head.textContent = '$ ' + command;
+    var out = document.createElement('div');
+    out.className = 'chat-tool-out';
+    var body = '';
+    if (result.stdout) body += result.stdout;
+    if (result.stderr) body += (body ? '\n' : '') + '[stderr]\n' + result.stderr;
+    if (!body) body = '(no output)';
+    if (body.length > 3000) body = body.slice(0, 3000) + '\n…[truncated]';
+    out.textContent = 'exit ' + result.exitCode + '\n' + body;
+    out.setAttribute('data-ok', result.ok ? '1' : '0');
+    div.appendChild(head);
+    div.appendChild(out);
+    if (result.written && result.written.length) {
+      var files = document.createElement('div');
+      files.className = 'chat-tool-files';
+      files.textContent = 'wrote: ' + result.written.join(', ');
+      div.appendChild(files);
+    }
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  // Codex-style loop: non-streaming turns with a single native tool.
+  // Each assistant tool_calls entry is executed via agent.js and fed back
+  // as a {role:'tool'} message until the model answers without tools.
+  async function agentLoop(prompt) {
+    history.push({ role: 'user', content: prompt });
+    addBubble('user', prompt);
+
+    var s = getSettings();
+    state = 'generating';
+    setDot('busy');
+    setLoadUI();
+    var sendBtn = $('sendBtn');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Stop';
+      sendBtn.classList.add('stop');
+    }
+    aborter = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var started = performance.now();
+    var steps = 0;
+    try {
+      while (true) {
+        if (aborter && aborter.signal.aborted) throw { name: 'AbortError' };
+        if (steps >= MAX_AGENT_ITERS) {
+          setStatus('Stopped after ' + MAX_AGENT_ITERS + ' tool steps — ask me to continue.', 'err');
+          break;
+        }
+        setStatus('Agent thinking… (step ' + (steps + 1) + '/' + MAX_AGENT_ITERS + ', local)');
+        var resp = await wllama.createChatCompletion({
+          messages: agentMessages(),
+          tools: [EXECUTE_BASH_TOOL],
+          tool_choice: 'auto',
+          max_tokens: s.maxTokens,
+          temperature: s.temperature,
+          abortSignal: aborter ? aborter.signal : undefined
+        });
+        var msg = resp && resp.choices && resp.choices[0] && resp.choices[0].message
+          ? resp.choices[0].message
+          : null;
+        if (!msg) throw new Error('empty agent response — try again');
+        var calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+        if (!calls.length) {
+          var text = typeof msg.content === 'string' ? msg.content : '';
+          if (!text) text = '(empty response — try again)';
+          var bubble = addBubble('assistant', text);
+          history.push({ role: 'assistant', content: text });
+          (function (finalText, b) { addUseButton(b, function () { return finalText; }); })(text, bubble);
+          var secs = ((performance.now() - started) / 1000).toFixed(1);
+          setStatus('Done locally in ' + secs + 's' + (steps ? ' after ' + steps + ' tool step' + (steps === 1 ? '' : 's') : '') + '.', 'ok');
+          break;
+        }
+        // Echo the assistant turn (with its tool calls) so the next
+        // request keeps the tool_call ids intact.
+        var normCalls = [];
+        for (var i = 0; i < calls.length; i++) {
+          var tc = calls[i] || {};
+          var fn = tc.function || {};
+          normCalls.push({
+            id: tc.id || ('call_' + steps + '_' + i),
+            type: 'function',
+            function: {
+              name: fn.name || 'execute_bash',
+              arguments: typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments == null ? {} : fn.arguments)
+            }
+          });
+        }
+        history.push({ role: 'assistant', content: typeof msg.content === 'string' ? msg.content : '', tool_calls: normCalls });
+        for (var j = 0; j < normCalls.length; j++) {
+          var call = normCalls[j];
+          var args = parseToolArgs(call.function.arguments);
+          var command = args && typeof args.command === 'string' ? args.command : '';
+          steps++;
+          if (call.function.name !== 'execute_bash' || !command.trim()) {
+            var errText = 'unknown or empty tool call (only execute_bash {command} is available)';
+            addToolBubble(command || call.function.name, { exitCode: 1, ok: false, stdout: '', stderr: errText, written: [] });
+            history.push({ role: 'tool', tool_call_id: call.id, content: 'error: ' + errText });
+            continue;
+          }
+          setStatus('Agent: $ ' + (command.length > 80 ? command.slice(0, 80) + '…' : command), '');
+          var result;
+          try {
+            result = await window.favsAgent.runBash(command);
+          } catch (runErr) {
+            result = {
+              exitCode: 1,
+              ok: false,
+              stdout: '',
+              stderr: runErr && runErr.message ? runErr.message : String(runErr),
+              written: []
+            };
+          }
+          addToolBubble(command, result);
+          var content = 'exit code: ' + result.exitCode + '\n';
+          if (result.written && result.written.length) {
+            content += 'files written: ' + result.written.join(', ') + '\n';
+          }
+          content += 'stdout:\n' + (result.stdout || '(empty)') + '\nstderr:\n' + (result.stderr || '(empty)');
+          history.push({ role: 'tool', tool_call_id: call.id, content: content });
+          if (!isAgentReady()) {
+            setStatus('Sandbox closed mid-run — pick the folder again to continue.', 'err');
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      var aborted = !!(aborter && aborter.signal.aborted) || (err && err.name === 'AbortError');
+      if (aborted) {
+        setStatus('Stopped.', '');
+      } else if (err && err.type === 'kv_cache_full') {
+        addBubble('error', 'Context is full — press Clear and start a new chat, or raise the context size in Settings → Model.');
+        setStatus('Context full. Clear the chat to continue.', 'err');
+      } else {
+        var m = err && err.message ? err.message : String(err);
+        addBubble('error', 'Agent error: ' + m + ' (tip: the small default model rarely follows tools — try the larger model in Settings → Model.)');
+        setStatus('Agent failed: ' + m, 'err');
+      }
+    } finally {
+      aborter = null;
+      state = 'ready';
+      setDot('ready');
+      setLoadUI();
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+        sendBtn.classList.remove('stop');
+      }
+    }
   }
 
   // Report which backend is actually active (WebGPU vs CPU, thread count).
@@ -314,6 +522,15 @@
       addBubble('user', prompt);
       history.push({ role: 'user', content: prompt });
       loadModel();
+      return;
+    }
+
+    // Agent mode: a folder is attached, so run the tool loop instead of a
+    // single completion. History already holds the user message in that path.
+    if (isAgentReady()) {
+      await agentLoop(prompt);
+      var input = $('composerInput');
+      if (input) input.focus();
       return;
     }
 
@@ -434,16 +651,60 @@
     }
   }
 
+  function setFolderUI(detail) {
+    var btn = $('chatFolder');
+    if (!btn) return;
+    if (detail && detail.status === 'ready' && detail.folderName) {
+      btn.textContent = 'Folder: ' + detail.folderName;
+      btn.title = detail.fileCount + ' text files sandboxed — click to detach';
+    } else if (detail && detail.status === 'starting') {
+      btn.textContent = 'Starting…';
+      btn.title = 'Sandbox is starting';
+    } else {
+      btn.textContent = 'Folder';
+      btn.title = 'Attach a folder for the coding agent (runs bash locally in a sandbox)';
+    }
+  }
+
+  function onAgentEvent(ev) {
+    var d = (ev && ev.detail) || {};
+    setFolderUI(d);
+    if (d.status === 'ready' || d.status === 'error' || d.status === 'starting') {
+      if (state !== 'generating') setStatus(d.message || '', d.status === 'error' ? 'err' : d.status === 'ready' ? 'ok' : '');
+    }
+  }
+
   function init() {
     var loadBtn = $('chatLoad');
     var clearBtn = $('chatClear');
     var sendBtn = $('sendBtn');
+    var folderBtn = $('chatFolder');
     if (!loadBtn) return;
     setLabel();
     setLoadUI();
+    setFolderUI(null);
 
     loadBtn.addEventListener('click', loadModel);
     if (clearBtn) clearBtn.addEventListener('click', clearChat);
+    if (folderBtn) {
+      folderBtn.addEventListener('click', function () {
+        try {
+          if (!window.favsAgent) {
+            setStatus('Agent runtime failed to load (agent.js missing?).', 'err');
+            return;
+          }
+          var st = window.favsAgent.getState();
+          if (st.status === 'ready' || st.status === 'starting') {
+            window.favsAgent.closeFolder();
+          } else {
+            window.favsAgent.pickFolder();
+          }
+        } catch (e) {
+          setStatus('Could not open the folder picker.', 'err');
+        }
+      });
+    }
+    window.addEventListener('favs:agent', onAgentEvent);
 
     window.addEventListener('favs:send', function (ev) {
       var text = ev && ev.detail && typeof ev.detail.text === 'string' ? ev.detail.text : '';

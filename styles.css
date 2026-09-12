@@ -1004,3 +1004,43 @@ html[data-theme="dark"] .chat-msg.user { color: #202124; }
 }
 
 .chat-use-btn:hover { background: var(--bg); border-color: var(--focus-border); }
+
+/* ---- Agent tool calls (coding agent shell output) ---- */
+.chat-msg.tool {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--accent);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-tool-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  margin-bottom: 0.35rem;
+}
+
+.chat-tool-out {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-height: 14rem;
+  overflow-y: auto;
+  color: var(--text-muted);
+}
+
+.chat-tool-out[data-ok="0"] { color: #d93025; }
+
+.chat-tool-files {
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #1e8e3e;
+}

@@ -18,15 +18,21 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=7`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=4`, `vault.js?v=1`, `chat.js?v=4`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=8`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=4`, `vault.js?v=1`, `agent.js?v=1`, `chat.js?v=5`).
 
 ## Vendoring (no CDN libraries)
 
-- NEVER load third-party libraries from CDNs — download the pinned version into `vendor/` and serve it same-origin. The only third-party host contacted at runtime is `huggingface.co`, for model weights.
-- Currently vendored: `@wllama/wllama@3.6.1` (`vendor/wllama/index.js` + `wllama.wasm`) and `@wllama/wllama-compat@3.6.1` (`vendor/wllama-compat/`, Safari fallback). `chat.js` references these via relative paths.
-- When upgrading a vendored file, bump the `?v=` on the `chat.js` script tag in `index.html` (the vendor URLs live inside `chat.js`, so its new URL busts the whole chain).
-- Cross-origin isolation (`_headers`: COOP/COEP) is required for multi-threaded WASM — do not remove it.
+- NEVER load third-party libraries from CDNs — download the pinned version into `vendor/` and serve it same-origin. Third-party hosts contacted at runtime: `huggingface.co` (model weights) and `wasmer.io` (shell packages for the agent sandbox, downloaded once then cached in browser storage).
+- Currently vendored: `@wllama/wllama@3.6.1` (`vendor/wllama/index.js` + `wllama.wasm`), `@wllama/wllama-compat@3.6.1` (`vendor/wllama-compat/`, Safari fallback), and `@wasmer/sdk@0.11.0` (`vendor/wasmer/dist/` + `vendor/wasmer/pkg/`, including `pkg/snippets/` — the wasm-bindgen glue statically imports it, do not omit). `chat.js`/`agent.js` reference these via relative paths.
+- When upgrading a vendored file, bump the `?v=` on the `chat.js`/`agent.js` script tag in `index.html` (the vendor URLs live inside those files, so a new URL busts the whole chain).
+- Cross-origin isolation (`_headers`: COOP/COEP) is required for multi-threaded WASM — do not remove it. `credentialless` (not `require-corp`) also satisfies the Wasmer SDK's SharedArrayBuffer need while keeping cross-origin favicons working.
 - Keep the pre-CSS theme snippet in sync between `index.html` and `settings.html` if the storage key changes.
+
+## Agent (local coding agent: Wasmer + WASIX + shell)
+
+- `agent.js` (ES module, `agent.js?v=N`) owns the sandbox; `chat.js` owns the tool loop. They talk via `window.favsAgent` (`getState/isReady/pickFolder/closeFolder/runBash`) and `favs:agent` CustomEvents on `window`.
+- Sandbox: `new Wasmer()` → `sandboxes.create({ packages: ['sharrattj/bash', 'sharrattj/coreutils'], shell: 'bash', files })` (`agent.js`). Cwd for every command is `/workspace`. Single native tool `execute_bash` (JSON schema in `chat.js`), non-streaming turns with `tool_choice: 'auto'`, max 8 tool steps per message, 30s per command.
+- Filesystem: the user picks a real folder (File System Access API, Chrome/Edge desktop). Text files (≤200KB, ≤500 files, ≤4MB, skips `.git`/`node_modules`/binaries) snapshot into the sandbox; after each command the sandbox is diffed and changes are written back. Nothing runs before a folder is picked.
 
 ## Models (localStorage `favs.settings.v1`: modelId, nCtx, maxTokens, temperature)
 
@@ -44,4 +50,4 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Verification
 
 - Do NOT verify visually — the user inspects visually.
-- Only verify JavaScript: run `node --check app.js`, `node --check settings.js` and `node --check chat.js` (plus a quick DOM-less smoke test if changed).
+- Only verify JavaScript: `node --check app.js`, `node --check settings.js`, `node --check chat.js`, and `Get-Content agent.js -Raw | node --input-type=module --check` (`agent.js` is ESM — plain `--check` misparses it), plus a quick DOM-less smoke test if changed.
