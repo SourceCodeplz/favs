@@ -1,6 +1,8 @@
 /* FAVS local chat — Liquid AI LFM2.5-350M running 100% in-browser.
  *
- * Engine: @wllama/wllama v3 (llama.cpp compiled to WASM + WebGPU backend).
+ * Engine: @wllama/wllama v3 (llama.cpp compiled to WASM + WebGPU backend),
+ * vendored under vendor/ (no CDN — see AGENTS.md). If you upgrade the
+ * vendored files, bump the ?v= on the chat.js script tag in index.html.
  * Why not transformers.js/ONNX: the "Llamas on the Web" benchmarks (May 2026)
  * show wllama's WebGPU backend decoding 45-69% faster at 29-33% less memory
  * than transformers.js/WebLLM, it loads ~3x faster, supports the LFM2 hybrid
@@ -14,8 +16,11 @@
 (function () {
   'use strict';
 
-  var WLLAMA_VERSION = '3.6.1';
-  var WLLAMA_CDN = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@' + WLLAMA_VERSION + '/esm';
+  var WLLAMA_VERSION = '3.6.1'; // vendored version, see vendor/
+  var WLLAMA_LIB = 'vendor/wllama/index.js';
+  var WLLAMA_WASM = 'vendor/wllama/wllama.wasm';
+  var WLLAMA_COMPAT_JS = 'vendor/wllama-compat/wllama.js';
+  var WLLAMA_COMPAT_WASM = 'vendor/wllama-compat/wllama.wasm';
   var HF_REPO = 'LiquidAI/LFM2.5-350M-GGUF';
   var HF_FILE = 'LFM2.5-350M-Q4_K_M.gguf';
   var N_CTX = 4096;
@@ -105,13 +110,10 @@
     setStatus('Loading engine…');
 
     try {
-      var parts = await Promise.all([
-        import(WLLAMA_CDN + '/index.js'),
-        import(WLLAMA_CDN + '/wasm-from-cdn.js')
-      ]);
-      var Wllama = parts[0].Wllama;
-      var WasmFromCDN = parts[1].default;
-      wllama = new Wllama(WasmFromCDN, { suppressNativeLog: true });
+      var mod = await import('./' + WLLAMA_LIB);
+      wllama = new mod.Wllama({ default: WLLAMA_WASM }, { suppressNativeLog: true });
+      // Keep the Safari fallback local too (default points at a CDN).
+      wllama.setCompat({ worker: WLLAMA_COMPAT_JS, wasm: WLLAMA_COMPAT_WASM });
 
       await wllama.loadModelFromHF(
         { repo: HF_REPO, file: HF_FILE },
