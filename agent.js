@@ -186,10 +186,80 @@ async function listSandboxFiles(fs, dir, out) {
   }
 }
 
+function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+// Run a shell command directly, WITHOUT triggering a syncBack (used BY the
+// sync itself for enumeration/content fallbacks — going through runBash here
+// would recurse). Throws on transport failure; check output.ok for exit status.
+async function runShellDirect(script) {
+  var output = await agent.sandbox
+    .shell(script, { cwd: WORKSPACE })
+    .run({ check: false, timeoutMs: CMD_TIMEOUT_MS });
+  return output;
+}
+
+// Enumerate workspace files. The fs API is preferred, but some SDK builds
+// reject readDir on the workspace root itself (`entry not found` on an empty
+// folder); the guest shell always sees the truth, so fall back to `find`.
+async function listSandboxPaths(fs) {
+  var out = [];
+  try {
+    await listSandboxFiles(fs, WORKSPACE, out);
+    return { paths: out, listError: null };
+  } catch (fsErr) {
+    var fsMsg = fsErr && fsErr.message ? fsErr.message : String(fsErr);
+    try { console.warn('[favs-agent] fs listing failed, trying shell find:', fsMsg); } catch (warnErr) {}
+    var output;
+    try {
+      output = await runShellDirect('find /workspace -type f 2>/dev/null | head -' + (MAX_FILES * 2));
+    } catch (shellErr) {
+      return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
+    }
+    var text = '';
+    try { text = output.stdout ? output.stdout.text() : ''; } catch (textErr) {}
+    var lines = String(text).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/\r$/, '');
+      if (!line) continue;
+      if (line.indexOf(WORKSPACE + '/') === 0) out.push(line.slice(WORKSPACE.length + 1));
+      else if (line.charAt(0) !== '/') out.push(line);
+    }
+    if (!output.ok && !out.length) {
+      return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
+    }
+    return { paths: out, listError: null };
+  }
+}
+
+// Read one workspace file as text. fs first; the guest shell (`cat`) covers
+// the same SDK builds where the fs API misbehaves. Returns null for binary.
+async function readSandboxText(fs, rel) {
+  var guest = WORKSPACE + '/' + rel;
+  try {
+    return await fs.readText(guest);
+  } catch (fsErr) {
+    var output = await runShellDirect('cat ' + shellQuote(guest));
+    if (!output.ok) {
+      throw new Error('could not read sandbox file "' + rel + '"');
+    }
+    var bytes = output.stdout ? output.stdout.bytes : null;
+    if (bytes && bytes.length > MAX_FILE_BYTES) {
+      throw new Error('skipped "' + rel + '" (exceeds the per-file cap)');
+    }
+    if (bytes && isBinary(bytes)) return null;
+    var text = '';
+    try { text = output.stdout ? output.stdout.text() : ''; } catch (textErr) {}
+    return text;
+  }
+}
 // Diff the sandbox against the shadow copy; write new/changed text files
 // back to the user-picked folder. Returns { written: [paths], errors: n,
 // notes: [strings] } — notes carry the first few failure reasons so the UI
 // can show *why* nothing landed on disk instead of failing silently.
+// An empty workspace with an empty shadow is the normal idle state, not an
+// error — it syncs quietly.
 async function syncBack() {
   var result = { written: [], errors: 0, notes: [] };
   function note(msg) {
@@ -213,27 +283,34 @@ async function syncBack() {
     }
   } catch (e) {}
   var fs = agent.sandbox.fs;
-  var paths = [];
-  try {
-    await listSandboxFiles(fs, WORKSPACE, paths);
-  } catch (e) {
-    note('could not list sandbox files: ' + (e && e.message ? e.message : String(e)));
+  var listed = await listSandboxPaths(fs);
+  if (listed.listError) {
+    // Only alarm when there was something to lose; a failed listing over an
+    // empty shadow just means "nothing to sync".
+    if (Object.keys(agent.shadow).length) {
+      note(listed.listError);
+    } else {
+      try { console.log('[favs-agent] sync: workspace not listable, shadow empty — nothing to do'); } catch (logErr) {}
+    }
     return result;
   }
+  var paths = listed.paths;
   // Guard: never sync absurd trees back (runaway `tar xzf`, build output...).
   if (paths.length > MAX_FILES * 2) {
-    result.errors++;
+    note('too many files (' + paths.length + ') — refusing to sync; narrow the command');
     return result;
   }
+  if (!paths.length && !Object.keys(agent.shadow).length) return result; // idle, quiet
   for (var i = 0; i < paths.length; i++) {
     var rel = paths[i];
     var text;
     try {
-      text = await fs.readText(WORKSPACE + '/' + rel);
+      text = await readSandboxText(fs, rel);
     } catch (e) {
-      note('could not read sandbox file "' + rel + '": ' + (e && e.message ? e.message : String(e)));
+      note(e && e.message ? e.message : String(e));
       continue;
     }
+    if (text === null) continue; // binary — skip quietly (walkLocal skips them too)
     if (agent.shadow[rel] === text) continue;
     if (text.length > MAX_FILE_BYTES) {
       note('skipped "' + rel + '" (' + text.length + ' chars exceeds the ' + MAX_FILE_BYTES + ' per-file cap)');
