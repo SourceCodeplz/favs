@@ -132,30 +132,92 @@ async function ensureDirHandle(path) {
   return handle;
 }
 
+async function entryIsDir(fs, full, e) {
+  // readDir entries are typed { name, kind: 'file'|'directory', size }
+  // upstream, but be liberal: older/newer SDKs may use `type`, boolean
+  // flags, or bare strings. When in doubt, stat the path.
+  if (e && (e.kind === 'directory' || e.kind === 'dir')) return true;
+  if (e && (e.kind === 'file')) return false;
+  if (e && (e.type === 'directory' || e.type === 'dir' || e.type === 'Dir')) return true;
+  if (e && (e.type === 'file' || e.type === 'File')) return false;
+  if (e && typeof e.isDirectory === 'boolean' && typeof e.isFile === 'boolean') return !!e.isDirectory;
+  if (e && typeof e.isDir === 'boolean') return !!e.isDir;
+  if (e && typeof e.is_dir === 'boolean') return !!e.is_dir;
+  if (e && e.metadata && (e.metadata.kind === 'directory' || e.metadata.isDir)) return true;
+  try {
+    var st = await fs.stat(full);
+    var k = st && (st.kind || st.type);
+    if (k === 'directory' || k === 'dir') return true;
+    if (k === 'file') return false;
+    if (st && typeof st.isDirectory === 'boolean') return !!st.isDirectory;
+    if (st && typeof st.isDir === 'boolean') return !!st.isDir;
+  } catch (statErr) {}
+  // Last resort: assume a file so at least readText is attempted; if it is
+  // really a directory, readText throws and the entry is skipped.
+  return false;
+}
+
 async function listSandboxFiles(fs, dir, out) {
   var entries = await fs.readDir(dir);
+  if (!entries) return;
+  // Some runtimes return { entries: [...] } or an async iterable.
+  if (!Array.isArray(entries) && Array.isArray(entries.entries)) entries = entries.entries;
+  if (!Array.isArray(entries) && typeof entries[Symbol.asyncIterator] === 'function') {
+    var collected = [];
+    for await (var it of entries) collected.push(it);
+    entries = collected;
+  }
+  if (!Array.isArray(entries)) return;
   for (var i = 0; i < entries.length; i++) {
     var e = entries[i];
-    var full = dir === '/' ? '/' + e.name : dir + '/' + e.name;
-    if (e.kind === 'directory') {
+    var raw = (typeof e === 'string') ? e : (e && (e.name || e.path)) || '';
+    if (!raw) continue;
+    // `name` is usually bare, but take the last segment in case an SDK
+    // ever returns a full guest path (avoids /workspace//workspace/x).
+    var base = raw.indexOf('/') === -1 ? raw : raw.slice(raw.lastIndexOf('/') + 1);
+    if (!base || base === '.' || base === '..') continue;
+    var full = dir + '/' + base;
+    var isDir = await entryIsDir(fs, full, (typeof e === 'object' && e) ? e : null);
+    if (isDir) {
       await listSandboxFiles(fs, full, out);
-    } else if (e.kind === 'file' && full.indexOf(WORKSPACE + '/') === 0) {
+    } else if (full.indexOf(WORKSPACE + '/') === 0) {
       out.push(full.slice(WORKSPACE.length + 1));
     }
   }
 }
 
 // Diff the sandbox against the shadow copy; write new/changed text files
-// back to the user-picked folder. Returns { written: [paths], errors: n }.
+// back to the user-picked folder. Returns { written: [paths], errors: n,
+// notes: [strings] } — notes carry the first few failure reasons so the UI
+// can show *why* nothing landed on disk instead of failing silently.
 async function syncBack() {
-  var result = { written: [], errors: 0 };
+  var result = { written: [], errors: 0, notes: [] };
+  function note(msg) {
+    result.errors++;
+    if (result.notes.length < 5) result.notes.push(String(msg).slice(0, 300));
+    try { console.warn('[favs-agent] sync:', msg); } catch (warnErr) {}
+  }
   if (!agent.sandbox || !agent.dirHandle) return result;
+  // The File System Access write grant can lapse (e.g. after dismissal);
+  // re-assert it so a silent NotAllowedError doesn't eat the user's files.
+  try {
+    if (agent.dirHandle.queryPermission) {
+      var perm = await agent.dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted' && agent.dirHandle.requestPermission) {
+        perm = await agent.dirHandle.requestPermission({ mode: 'readwrite' });
+      }
+      if (perm !== 'granted') {
+        note('browser denied write access to "' + agent.folderName + '" — re-pick the folder and allow writing');
+        return result;
+      }
+    }
+  } catch (e) {}
   var fs = agent.sandbox.fs;
   var paths = [];
   try {
     await listSandboxFiles(fs, WORKSPACE, paths);
   } catch (e) {
-    result.errors++;
+    note('could not list sandbox files: ' + (e && e.message ? e.message : String(e)));
     return result;
   }
   // Guard: never sync absurd trees back (runaway `tar xzf`, build output...).
@@ -169,12 +231,12 @@ async function syncBack() {
     try {
       text = await fs.readText(WORKSPACE + '/' + rel);
     } catch (e) {
-      result.errors++;
+      note('could not read sandbox file "' + rel + '": ' + (e && e.message ? e.message : String(e)));
       continue;
     }
     if (agent.shadow[rel] === text) continue;
     if (text.length > MAX_FILE_BYTES) {
-      result.errors++;
+      note('skipped "' + rel + '" (' + text.length + ' chars exceeds the ' + MAX_FILE_BYTES + ' per-file cap)');
       continue;
     }
     try {
@@ -183,13 +245,17 @@ async function syncBack() {
       var name = slash === -1 ? rel : rel.slice(slash + 1);
       var fileHandle = await dirHandle.getFileHandle(name, { create: true });
       var writable = await fileHandle.createWritable();
-      await writable.write(text);
+      try {
+        // Truncate-then-write so a shorter rewrite never leaves a stale tail.
+        await writable.write({ type: 'truncate', size: 0 });
+      } catch (truncateErr) {}
+      await writable.write(new Blob([text], { type: 'text/plain' }));
       await writable.close();
       agent.fileHandles[rel] = fileHandle;
       agent.shadow[rel] = text;
       result.written.push(rel);
     } catch (e) {
-      result.errors++;
+      note('could not write "' + rel + '" to disk: ' + (e && e.name === 'NotAllowedError' ? 'browser blocked writing — re-pick the folder and allow access' : (e && e.message ? e.message : String(e))));
     }
   }
   return result;
@@ -226,7 +292,8 @@ async function runBash(command) {
     stdout: truncate(stdout, MODEL_OUTPUT_CHARS),
     stderr: truncate(stderr, MODEL_OUTPUT_CHARS),
     written: sync.written.slice(0, 50),
-    syncErrors: sync.errors
+    syncErrors: sync.errors,
+    syncNotes: sync.notes.slice(0, 5)
   };
 }
 

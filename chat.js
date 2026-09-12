@@ -54,12 +54,12 @@
   // Agent mode (single native tool). Active when a folder is attached via
   // agent.js — the sandbox shell sees the folder at /workspace.
   var MAX_AGENT_ITERS = 8; // tool steps per user message
-  var AGENT_SYSTEM_PROMPT = 'You are a local coding agent running in the user\'s browser. You have one tool: execute_bash, a POSIX shell (bash + coreutils: ls, cat, grep, find, sed, awk, cp, mv) inside a sandbox. The user\'s picked folder is mounted at /workspace — always work there, never invent paths outside it. Explore before editing (ls, cat, grep). Make small, verifiable changes; re-run checks (e.g. ls, grep) to confirm. Keep each command short and its output small (pipe through head). File edits persist to the user\'s real folder, so say what you changed. When done, summarize the changes and how to verify. If the task needs no shell, just answer directly.';
+  var AGENT_SYSTEM_PROMPT = 'You are a local coding agent running in the user\'s browser. You have one tool: execute_bash, a POSIX shell (bash + coreutils: ls, cat, grep, find, sed, awk, cp, mv) inside a sandbox. The user\'s picked folder is mounted at /workspace — always work there, never invent paths outside it. Explore before editing (ls, cat, grep). Make small, verifiable changes; re-run checks (e.g. ls, grep) to confirm. Every tool result reports "files written" (what actually landed in the user\'s real folder) plus sync errors — never claim a file was created until "files written" lists it; if it is missing, say so and diagnose instead of pretending success. Keep each command short and its output small (pipe through head). When done, summarize the changes and how to verify. If the task needs no shell, just answer directly.';
   var EXECUTE_BASH_TOOL = {
     type: 'function',
     function: {
       name: 'execute_bash',
-      description: 'Run a POSIX shell command in the sandboxed workspace (/workspace = the user\'s picked folder). Has ls, cat, grep, find, sed, awk, cp, mv. Returns exit code, stdout and stderr. File changes persist to the user\'s folder.',
+      description: 'Run a POSIX shell command in the sandboxed workspace (/workspace = the user\'s picked folder). Has ls, cat, grep, find, sed, awk, cp, mv. Returns exit code, stdout and stderr, plus "files written" (the files that actually reached the user\'s disk) and sync errors. Only files listed under "files written" persisted — if empty after creating files, the write-back failed (see sync notes).',
       parameters: {
         type: 'object',
         properties: {
@@ -282,6 +282,13 @@
       files.textContent = 'wrote: ' + result.written.join(', ');
       div.appendChild(files);
     }
+    if (result.syncErrors) {
+      var sync = document.createElement('div');
+      sync.className = 'chat-tool-files';
+      var detail = result.syncNotes && result.syncNotes.length ? ' — ' + result.syncNotes.join(' | ') : '';
+      sync.textContent = 'sync: ' + result.syncErrors + ' error(s), nothing reached the disk for those files' + detail;
+      div.appendChild(sync);
+    }
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
     return div;
@@ -365,7 +372,7 @@
           steps++;
           if (call.function.name !== 'execute_bash' || !command.trim()) {
             var errText = 'unknown or empty tool call (only execute_bash {command} is available)';
-            addToolBubble(command || call.function.name, { exitCode: 1, ok: false, stdout: '', stderr: errText, written: [] });
+            addToolBubble(command || call.function.name, { exitCode: 1, ok: false, stdout: '', stderr: errText, written: [], syncErrors: 0, syncNotes: [] });
             history.push({ role: 'tool', tool_call_id: call.id, content: 'error: ' + errText });
             continue;
           }
@@ -379,7 +386,9 @@
               ok: false,
               stdout: '',
               stderr: runErr && runErr.message ? runErr.message : String(runErr),
-              written: []
+              written: [],
+              syncErrors: 0,
+              syncNotes: []
             };
           }
           addToolBubble(command, result);
@@ -387,6 +396,14 @@
           var content = 'exit code: ' + result.exitCode + '\n';
           if (result.written && result.written.length) {
             content += 'files written: ' + result.written.join(', ') + '\n';
+          } else {
+            content += 'files written: (none — no changes reached the user\'s disk)\n';
+          }
+          if (result.syncErrors) {
+            content += 'sync errors: ' + result.syncErrors + '\n';
+            if (result.syncNotes && result.syncNotes.length) {
+              content += 'sync notes: ' + result.syncNotes.join(' | ') + '\n';
+            }
           }
           content += 'stdout:\n' + (result.stdout || '(empty)') + '\nstderr:\n' + (result.stderr || '(empty)');
           history.push({ role: 'tool', tool_call_id: call.id, content: content });
@@ -769,22 +786,26 @@
     if (body.length > 2000) body = body.slice(0, 2000) + '\n…[truncated]';
     line(result.ok ? 'out' : 'err', body);
     if (result.written && result.written.length) line('files', 'wrote: ' + result.written.join(', '));
+    if (result.syncErrors) {
+      var detail = result.syncNotes && result.syncNotes.length ? ' — ' + result.syncNotes.join(' | ') : '';
+      line('err', 'sync: ' + result.syncErrors + ' error(s), file(s) did NOT reach your disk' + detail);
+    }
     log.scrollTop = log.scrollHeight;
   }
 
   async function runTermCommand(command) {
     if (!window.favsAgent || !window.favsAgent.isReady()) {
-      termLog(command, { exitCode: 1, ok: false, stdout: '', stderr: 'sandbox is not ready', written: [] });
+      termLog(command, { exitCode: 1, ok: false, stdout: '', stderr: 'sandbox is not ready', written: [], syncErrors: 0, syncNotes: [] });
       return;
     }
-    termLog(command, { exitCode: 0, ok: true, stdout: '…running', stderr: '', written: [] });
+    termLog(command, { exitCode: 0, ok: true, stdout: '…running', stderr: '', written: [], syncErrors: 0, syncNotes: [] });
     var log = $('agentTermLog');
     var placeholder = log ? log.lastChild : null;
     var result;
     try {
       result = await window.favsAgent.runBash(command);
     } catch (e) {
-      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [] };
+      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [], syncErrors: 0, syncNotes: [] };
     }
     if (placeholder && placeholder.parentNode === log) log.removeChild(placeholder);
     termLog(command, result);
@@ -799,7 +820,7 @@
     try {
       result = await window.favsAgent.runBash('echo sandbox-ok && pwd && ls /workspace | head -20');
     } catch (e) {
-      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [] };
+      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [], syncErrors: 0, syncNotes: [] };
     }
     termLog('echo sandbox-ok && pwd && ls /workspace | head -20', result, 'self-test — real WASIX shell, no model involved');
   }
