@@ -1,8 +1,8 @@
 /* FAVS agent runtime — local coding agent sandbox.
  *
  * Wasmer + WASIX + shell: @wasmer/sdk v0.11.0 (vendored under vendor/wasmer/,
- * no CDN — see AGENTS.md) runs `sharrattj/bash` + `sharrattj/coreutils`
- * (the BusyBox equivalent: sh, ls, grep, find, sed, cp, ...) 100% in-browser.
+ * no CDN — see AGENTS.md) runs `wasmer/bash` (the official shell package,
+ * same as wasmer.sh uses — bundles Unix tools: ls, grep, find, sed, ...) 100% in-browser.
  * The model gets a single tool, `execute_bash`, implemented here as
  * `sandbox.shell(command).run()` with cwd /workspace.
  *
@@ -18,7 +18,11 @@
 
 import { Wasmer } from './vendor/wasmer/dist/index.js';
 
-var PACKAGES = ['sharrattj/bash', 'sharrattj/coreutils'];
+// Official shell package (same as wasmer.sh). It bundles the Unix tools,
+// so no separate coreutils package is needed. NOTE: do NOT switch back to
+// `sharrattj/bash` — it throws `RuntimeError: function signature mismatch`
+// on every shell invocation with current SDK versions (see wasmer-sdk#463).
+var PACKAGES = ['wasmer/bash'];
 var WORKSPACE = '/workspace';
 var CMD_TIMEOUT_MS = 30000;
 var MODEL_OUTPUT_CHARS = 8000; // truncation budget per stream for tool results
@@ -276,21 +280,16 @@ async function pickFolder() {
     // Resolve the real shell command instead of guessing its name.
     var bashPkg;
     try {
-      bashPkg = await agent.wasmer.packages.load('sharrattj/bash');
+      bashPkg = await agent.wasmer.packages.load('wasmer/bash');
     } catch (e) {
-      throw new Error('could not download sharrattj/bash from the Wasmer registry (network?): ' + (e && e.message ? e.message : String(e)));
+      throw new Error('could not download wasmer/bash from the Wasmer registry (network?): ' + (e && e.message ? e.message : String(e)));
     }
     var shellName = (bashPkg && bashPkg.entrypoint) || (bashPkg && bashPkg.commands && bashPkg.commands[0]);
-    if (!shellName) throw new Error('sharrattj/bash exports no commands');
+    if (!shellName) throw new Error('wasmer/bash exports no commands');
     try {
       shellRef = bashPkg.command(shellName);
     } catch (e) {
       shellRef = shellName;
-    }
-    try {
-      await agent.wasmer.packages.load('sharrattj/coreutils');
-    } catch (e) {
-      throw new Error('could not download sharrattj/coreutils from the Wasmer registry (network?): ' + (e && e.message ? e.message : String(e)));
     }
     agent.sandbox = await agent.wasmer.sandboxes.create({
       packages: PACKAGES,

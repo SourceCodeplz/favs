@@ -18,7 +18,7 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=9`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=4`, `vault.js?v=1`, `agent.js?v=2`, `chat.js?v=7`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=9`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=4`, `vault.js?v=1`, `agent.js?v=3`, `chat.js?v=7`).
 
 ## Vendoring (no CDN libraries)
 
@@ -31,7 +31,7 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Agent (local coding agent: Wasmer + WASIX + shell)
 
 - `agent.js` (ES module, `agent.js?v=N`) owns the sandbox; `chat.js` owns the tool loop. They talk via `window.favsAgent` (`getState/isReady/pickFolder/closeFolder/runBash`) and `favs:agent` CustomEvents on `window`.
-- Sandbox: `new Wasmer()` → `ready()` → `packages.load('sharrattj/bash')` to resolve the real shell command (entrypoint/commands[0], never guessed) → `sandboxes.create({ packages: ['sharrattj/bash', 'sharrattj/coreutils'], shell: <CommandRef>, files })` (`agent.js`). Cwd for every command is `/workspace`. Single native tool `execute_bash` (JSON schema in `chat.js`), non-streaming turns with `tool_choice: 'auto'`, max 8 tool steps per message, 30s per command.
+- Sandbox: `new Wasmer()` → `ready()` → `packages.load('wasmer/bash')` to resolve the real shell command (entrypoint/commands[0], never guessed) → `sandboxes.create({ packages: ['wasmer/bash'], shell: <CommandRef>, files })` (`agent.js`). Never use `sharrattj/bash` — it throws `function signature mismatch` on every run (wasmer-sdk#463). Cwd for every command is `/workspace`. Single native tool `execute_bash` (JSON schema in `chat.js`), non-streaming turns with `tool_choice: 'auto'`, max 8 tool steps per message, 30s per command.
 - Console: `#agentStatus` line always shows sandbox state; `#agentTerm` terminal (visible when ready) runs bash directly via `favsAgent.runBash` with no model involved, and every model tool step is logged there too. A self-test (`echo sandbox-ok && pwd && ls /workspace`) runs automatically on first ready.
 - Filesystem: the user picks a real folder (File System Access API, Chrome/Edge desktop). Text files (≤200KB, ≤500 files, ≤4MB, skips `.git`/`node_modules`/binaries) snapshot into the sandbox; after each command the sandbox is diffed and changes are written back. Nothing runs before a folder is picked.
 
