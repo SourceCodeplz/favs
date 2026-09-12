@@ -1,32 +1,30 @@
-/* FAVS settings page. Sections: general / appearance / engines / bookmarks. */
+/* FAVS settings page. Sections: general / appearance / model.
+ *
+ * MODELS below must stay in sync with chat.js (same id/repo/file).
+ * Old keys (engines, defaultEngine, bookmarks, ...) are ignored on load
+ * but preserved in storage so nothing is lost by upgrading.
+ */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'favs.settings.v1';
 
-  var ENGINES = [
-    { id: 'google', name: 'Google', template: 'https://www.google.com/search?q=%s' },
-    { id: 'bing', name: 'Bing', template: 'https://www.bing.com/search?q=%s' },
-    { id: 'duckduckgo', name: 'DuckDuckGo', template: 'https://duckduckgo.com/?q=%s' },
-    { id: 'brave', name: 'Brave', template: 'https://search.brave.com/search?q=%s' },
-    { id: 'yahoo', name: 'Yahoo', template: 'https://search.yahoo.com/search?p=%s' },
-    { id: 'ecosia', name: 'Ecosia', template: 'https://www.ecosia.org/search?q=%s' },
-    { id: 'startpage', name: 'Startpage', template: 'https://www.startpage.com/sp/search?query=%s' },
-    { id: 'perplexity', name: 'Perplexity', template: 'https://www.perplexity.ai/search?q=%s' },
-    { id: 'you', name: 'You.com', template: 'https://you.com/search?q=%s' },
-    { id: 'wikipedia', name: 'Wikipedia', template: 'https://en.wikipedia.org/wiki/Special:Search?search=%s' }
+  var MODELS = [
+    { id: 'lfm25-350m', name: 'LFM2.5 350M', repo: 'LiquidAI/LFM2.5-350M-GGUF', file: 'LFM2.5-350M-Q4_K_M.gguf', size: '~200 MB', desc: 'Default. Tiny, fast, tiny download.' },
+    { id: 'gemma3-270m', name: 'Gemma 3 270M IT', repo: 'unsloth/gemma-3-270m-it-GGUF', file: 'gemma-3-270m-it-Q4_K_M.gguf', size: '~250 MB', desc: 'Google edge model. Good for short rewrites.' },
+    { id: 'gemma4-e2b', name: 'Gemma 4 E2B IT', repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu', file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf', size: '~3.3 GB', desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.' }
   ];
+
+  var CTX_OPTIONS = [2048, 4096, 8192, 16384, 32768];
 
   function defaultSettings() {
     return {
       siteName: 'favs.eu.org',
       theme: 'system',
-      engines: { google: true },
-      defaultEngine: 'google',
-      bookmarks: [],
-      bookmarkIconSize: 32,
-      bookmarkTextSize: 12,
-      bookmarkNoReferrer: true
+      modelId: 'lfm25-350m',
+      nCtx: 4096,
+      maxTokens: 512,
+      temperature: 0.7
     };
   }
 
@@ -38,29 +36,63 @@
     return Math.round(n);
   }
 
+  function modelById(id) {
+    for (var i = 0; i < MODELS.length; i++) {
+      if (MODELS[i].id === id) return MODELS[i];
+    }
+    return null;
+  }
+
   function loadSettings() {
+    var base = defaultSettings();
+    var raw = null;
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { return base; }
+    if (!raw) return base;
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return defaultSettings();
       var parsed = JSON.parse(raw);
-      var base = defaultSettings();
+      var modelId = typeof parsed.modelId === 'string' ? parsed.modelId : base.modelId;
+      if (!modelById(modelId)) modelId = base.modelId;
+      var nCtx = Number(parsed.nCtx);
+      if (CTX_OPTIONS.indexOf(nCtx) === -1) nCtx = base.nCtx;
       return {
         siteName: typeof parsed.siteName === 'string' && parsed.siteName.trim() ? parsed.siteName : base.siteName,
         theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
-        engines: parsed.engines && typeof parsed.engines === 'object' ? parsed.engines : base.engines,
-        defaultEngine: typeof parsed.defaultEngine === 'string' ? parsed.defaultEngine : base.defaultEngine,
-        bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
-        bookmarkIconSize: clampNumber(parsed.bookmarkIconSize, 20, 64, base.bookmarkIconSize),
-        bookmarkTextSize: clampNumber(parsed.bookmarkTextSize, 10, 18, base.bookmarkTextSize),
-        bookmarkNoReferrer: parsed.bookmarkNoReferrer === false ? false : true
+        modelId: modelId,
+        nCtx: nCtx,
+        maxTokens: clampNumber(parsed.maxTokens, 64, 4096, base.maxTokens),
+        temperature: (function () {
+          var t = Number(parsed.temperature);
+          if (!isFinite(t)) return base.temperature;
+          if (t < 0) return 0;
+          if (t > 2) return 2;
+          return Math.round(t * 10) / 10;
+        })(),
+        // Preserve unknown/legacy keys (engines, bookmarks, ...) untouched.
+        _extra: parsed && typeof parsed === 'object' ? parsed : {}
       };
     } catch (e) {
-      return defaultSettings();
+      return base;
     }
   }
 
   function saveSettings(s) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    var out;
+    if (s && s._extra && typeof s._extra === 'object') {
+      out = {};
+      for (var k in s._extra) {
+        if (Object.prototype.hasOwnProperty.call(s._extra, k)) out[k] = s._extra[k];
+      }
+    } else {
+      out = {};
+    }
+    out.siteName = s.siteName;
+    out.theme = s.theme;
+    out.modelId = s.modelId;
+    out.nCtx = s.nCtx;
+    out.maxTokens = s.maxTokens;
+    out.temperature = s.temperature;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    s._extra = out;
     applyTheme(s.theme);
     toast('Saved');
   }
@@ -81,98 +113,57 @@
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1500);
   }
 
-  function normalizeUrl(u) {
-    var v = (u || '').trim();
-    if (!v) return '';
-    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) v = 'https://' + v;
-    return v;
-  }
-
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
-  function enabledCount(settings) {
-    return ENGINES.filter(function (e) { return !!settings.engines[e.id]; }).length;
-  }
-
-  function renderEngines(settings) {
-    var list = document.getElementById('engineList');
-    var defSel = document.getElementById('defaultEngine');
-    var hint = document.getElementById('engineHint');
-    if (!list || !defSel) return;
+  function renderModels(settings) {
+    var list = document.getElementById('modelList');
+    if (!list) return;
     list.innerHTML = '';
-    defSel.innerHTML = '';
-
-    ENGINES.forEach(function (e) {
-      var on = !!settings.engines[e.id];
-
+    MODELS.forEach(function (m) {
       var row = document.createElement('label');
-      row.className = 'engine-item';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = on;
-      cb.setAttribute('data-engine', e.id);
-      cb.addEventListener('change', function () {
-        if (cb.checked) {
-          settings.engines[e.id] = true;
-        } else {
-          // Keep at least one engine enabled.
-          var after = enabledCount(settings) - (settings.engines[e.id] ? 1 : 0);
-          if (after < 1) {
-            cb.checked = true;
-            toast('Keep at least one engine enabled');
-            return;
-          }
-          delete settings.engines[e.id];
-          if (settings.defaultEngine === e.id) {
-            var remaining = ENGINES.filter(function (x) { return !!settings.engines[x.id]; });
-            settings.defaultEngine = remaining.length ? remaining[0].id : 'google';
-          }
+      row.className = 'model-item' + (settings.modelId === m.id ? ' selected' : '');
+      var radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'model';
+      radio.value = m.id;
+      radio.checked = settings.modelId === m.id;
+      radio.addEventListener('change', function () {
+        if (radio.checked) {
+          settings.modelId = m.id;
+          saveSettings(settings);
+          renderModels(settings);
         }
-        saveSettings(settings);
-        renderEngines(settings);
       });
-      var name = document.createElement('span');
-      name.innerHTML = '<strong>' + escapeHtml(e.name) + '</strong><br><small style="color:var(--text-muted)">' + escapeHtml(e.template) + '</small>';
-      row.appendChild(cb);
-      row.appendChild(name);
+      var body = document.createElement('span');
+      body.className = 'model-body';
+      body.innerHTML = '<strong>' + escapeHtml(m.name) + '</strong>' +
+        '<span class="model-size">' + escapeHtml(m.size) + '</span>' +
+        '<small>' + escapeHtml(m.desc) + '<br>' + escapeHtml(m.repo + ' / ' + m.file) + '</small>';
+      row.appendChild(radio);
+      row.appendChild(body);
       list.appendChild(row);
-
-      if (on) {
-        var opt = document.createElement('option');
-        opt.value = e.id;
-        opt.textContent = e.name;
-        defSel.appendChild(opt);
-      }
     });
-
-    defSel.value = settings.defaultEngine;
-    if (hint) {
-      var n = enabledCount(settings);
-      hint.textContent = n > 1
-        ? n + ' engines enabled — a dropdown will appear on the start page.'
-        : 'Only one engine enabled — the start page search goes straight to ' + settings.defaultEngine + '.';
-    }
   }
 
-  function renderBookmarkSettings(settings) {
-    var icon = document.getElementById('bookmarkIconSize');
-    var iconVal = document.getElementById('bookmarkIconSizeVal');
-    var text = document.getElementById('bookmarkTextSize');
-    var textVal = document.getElementById('bookmarkTextSizeVal');
-    var noRef = document.getElementById('bookmarkNoReferrer');
-    if (icon) {
-      icon.value = settings.bookmarkIconSize;
-      if (iconVal) iconVal.textContent = settings.bookmarkIconSize;
+  function renderModelParams(settings) {
+    var nCtx = document.getElementById('nCtx');
+    var maxTokens = document.getElementById('maxTokens');
+    var maxTokensVal = document.getElementById('maxTokensVal');
+    var temperature = document.getElementById('temperature');
+    var temperatureVal = document.getElementById('temperatureVal');
+    if (nCtx) nCtx.value = String(settings.nCtx);
+    if (maxTokens) {
+      maxTokens.value = settings.maxTokens;
+      if (maxTokensVal) maxTokensVal.textContent = settings.maxTokens;
     }
-    if (text) {
-      text.value = settings.bookmarkTextSize;
-      if (textVal) textVal.textContent = settings.bookmarkTextSize;
+    if (temperature) {
+      temperature.value = settings.temperature;
+      if (temperatureVal) temperatureVal.textContent = settings.temperature;
     }
-    if (noRef) noRef.checked = settings.bookmarkNoReferrer !== false;
   }
 
   function switchSection(name) {
@@ -220,41 +211,39 @@
       });
     });
 
-    // Engines
-    renderEngines(settings);
-    var defSel = document.getElementById('defaultEngine');
-    if (defSel) {
-      defSel.addEventListener('change', function () {
-        settings.defaultEngine = defSel.value;
-        saveSettings(settings);
-        renderEngines(settings);
-      });
-    }
+    // Model: switcher + params
+    renderModels(settings);
+    renderModelParams(settings);
 
-    // Bookmarks: global appearance/behavior (add/edit happens on start page)
-    renderBookmarkSettings(settings);
-    var iconInput = document.getElementById('bookmarkIconSize');
-    if (iconInput) {
-      iconInput.addEventListener('input', function () {
-        settings.bookmarkIconSize = clampNumber(iconInput.value, 20, 64, defaultSettings().bookmarkIconSize);
-        var v = document.getElementById('bookmarkIconSizeVal');
-        if (v) v.textContent = settings.bookmarkIconSize;
+    var nCtx = document.getElementById('nCtx');
+    if (nCtx) {
+      nCtx.addEventListener('change', function () {
+        var v = Number(nCtx.value);
+        if (CTX_OPTIONS.indexOf(v) !== -1) {
+          settings.nCtx = v;
+          saveSettings(settings);
+        }
+      });
+    }
+    var maxTokens = document.getElementById('maxTokens');
+    if (maxTokens) {
+      maxTokens.addEventListener('input', function () {
+        settings.maxTokens = clampNumber(maxTokens.value, 64, 4096, defaultSettings().maxTokens);
+        var v = document.getElementById('maxTokensVal');
+        if (v) v.textContent = settings.maxTokens;
         saveSettings(settings);
       });
     }
-    var textInput = document.getElementById('bookmarkTextSize');
-    if (textInput) {
-      textInput.addEventListener('input', function () {
-        settings.bookmarkTextSize = clampNumber(textInput.value, 10, 18, defaultSettings().bookmarkTextSize);
-        var v = document.getElementById('bookmarkTextSizeVal');
-        if (v) v.textContent = settings.bookmarkTextSize;
-        saveSettings(settings);
-      });
-    }
-    var noRefInput = document.getElementById('bookmarkNoReferrer');
-    if (noRefInput) {
-      noRefInput.addEventListener('change', function () {
-        settings.bookmarkNoReferrer = !!noRefInput.checked;
+    var temperature = document.getElementById('temperature');
+    if (temperature) {
+      temperature.addEventListener('input', function () {
+        var t = Number(temperature.value);
+        if (!isFinite(t)) return;
+        if (t < 0) t = 0;
+        if (t > 2) t = 2;
+        settings.temperature = Math.round(t * 10) / 10;
+        var v = document.getElementById('temperatureVal');
+        if (v) v.textContent = settings.temperature;
         saveSettings(settings);
       });
     }
@@ -264,12 +253,18 @@
     if (resetBtn) {
       resetBtn.addEventListener('click', function () {
         if (!window.confirm('Reset all settings?')) return;
-        settings = defaultSettings();
+        var fresh = defaultSettings();
+        settings.siteName = fresh.siteName;
+        settings.theme = fresh.theme;
+        settings.modelId = fresh.modelId;
+        settings.nCtx = fresh.nCtx;
+        settings.maxTokens = fresh.maxTokens;
+        settings.temperature = fresh.temperature;
         saveSettings(settings);
         if (nameInput) nameInput.value = settings.siteName;
         document.querySelectorAll('input[name="theme"]').forEach(function (r) { r.checked = r.value === settings.theme; });
-        renderEngines(settings);
-        renderBookmarkSettings(settings);
+        renderModels(settings);
+        renderModelParams(settings);
       });
     }
 

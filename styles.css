@@ -862,3 +862,145 @@ html[data-theme="dark"] .chat-msg.user { color: #202124; }
 @media (prefers-reduced-motion: reduce) {
   .chat-dot[data-state="loading"], .chat-dot[data-state="busy"] { animation: none; }
 }
+
+/* ---- Unified composer (text box with Send / Save) ---- */
+.composer {
+  width: min(92vw, 584px);
+  margin-top: 0.5rem;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  overflow: clip;
+  transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+
+.composer:hover { box-shadow: var(--shadow-lg); }
+
+.composer:focus-within {
+  border-color: var(--focus-border);
+  box-shadow: var(--shadow-lg), 0 0 0 4px var(--focus-ring);
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 168px;
+  padding: 0.9rem 1.1rem 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--field-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+}
+
+.composer textarea::placeholder { color: var(--placeholder); opacity: 1; }
+
+.composer-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem 0.6rem 1.1rem;
+}
+
+.composer-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-hint kbd {
+  font-family: inherit;
+  font-size: 0.75rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 0.05rem 0.35rem;
+}
+
+.composer-foot .composer-open {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.composer-foot .composer-open:hover { text-decoration: underline; }
+
+.composer-btn {
+  padding: 0.55rem 1.3rem;
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.18s var(--ease), transform 0.12s var(--ease);
+}
+
+.composer-btn:hover { background: var(--button-hover); border-color: var(--button-hover); }
+.composer-btn:active { transform: scale(0.97); }
+.composer-btn:disabled { opacity: 0.6; cursor: default; }
+
+.composer-btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--card-border);
+}
+
+.composer-btn.secondary:hover { background: var(--card-bg); border-color: var(--card-border); }
+
+.composer-btn.stop {
+  background: transparent;
+  color: #d93025;
+  border-color: rgba(217, 48, 37, 0.5);
+}
+
+.composer-btn.stop:hover { background: rgba(217, 48, 37, 0.1); border-color: #d93025; }
+
+.composer-status {
+  min-height: 1.25rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.composer-status.ok { color: #1e8e3e; }
+.composer-status.err { color: #d93025; }
+
+.chat-model-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 0.5rem 0.4rem;
+}
+
+.chat-model-link:hover { text-decoration: underline; }
+
+.chat-use-btn {
+  margin-top: 0.45rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--card-border);
+  background: var(--field-bg);
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+.chat-use-btn:hover { background: var(--bg); border-color: var(--focus-border); }

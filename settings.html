@@ -16,8 +16,8 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=5">
-<link rel="stylesheet" href="settings.css?v=3">
+<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="settings.css?v=4">
 </head>
 <body class="settings-body">
   <header class="settings-topbar">
@@ -28,13 +28,12 @@
     <nav class="settings-nav" aria-label="Settings sections">
       <button type="button" data-section="general" aria-selected="true">General</button>
       <button type="button" data-section="appearance" aria-selected="false">Appearance</button>
-      <button type="button" data-section="engines" aria-selected="false">Search engines</button>
-      <button type="button" data-section="bookmarks" aria-selected="false">Bookmarks</button>
+      <button type="button" data-section="model" aria-selected="false">Model</button>
     </nav>
     <main class="settings-content">
       <section class="settings-section" data-section-panel="general">
         <h2>General</h2>
-        <p class="desc">Basic start-page preferences.</p>
+        <p class="desc">Basic preferences.</p>
         <div class="card">
           <div class="field">
             <label class="label" for="siteName">Site name</label>
@@ -61,42 +60,40 @@
         </div>
       </section>
 
-      <section class="settings-section" data-section-panel="engines" hidden>
-        <h2>Search engines</h2>
-        <p class="desc">Enable the engines you want. If more than one is enabled, a dropdown appears on the start page to pick one per search.</p>
-        <div class="card">
-          <div class="engine-list" id="engineList"></div>
-        </div>
+      <section class="settings-section" data-section-panel="model" hidden>
+        <h2>Model</h2>
+        <p class="desc">Pick the local model and how it runs. Everything stays in your browser — models download once, then run offline from cache.</p>
         <div class="card">
           <div class="field">
-            <label class="label" for="defaultEngine">Default engine</label>
-            <select id="defaultEngine"></select>
-          </div>
-          <p class="desc" id="engineHint"></p>
-        </div>
-      </section>
-
-      <section class="settings-section" data-section-panel="bookmarks" hidden>
-        <h2>Bookmarks</h2>
-        <p class="desc">Add bookmarks from the start page. These settings apply to all bookmarks.</p>
-        <div class="card">
-          <div class="field">
-            <label class="label" for="bookmarkIconSize">Icon size (<span id="bookmarkIconSizeVal">32</span>px)</label>
-            <input type="range" id="bookmarkIconSize" min="20" max="64" step="1">
-          </div>
-          <div class="field">
-            <label class="label" for="bookmarkTextSize">Text size (<span id="bookmarkTextSizeVal">12</span>px)</label>
-            <input type="range" id="bookmarkTextSize" min="10" max="18" step="1">
+            <label class="label">Model</label>
+            <div class="model-list" id="modelList"></div>
           </div>
         </div>
         <div class="card">
-          <label class="check-row"><input type="checkbox" id="bookmarkNoReferrer"> Hide referrer when opening bookmarks</label>
-          <p class="desc">When on, bookmark links use <code>rel="noopener noreferrer"</code> and send no referrer. When off, sites you open can see the start page address.</p>
+          <div class="field">
+            <label class="label" for="nCtx">Context size</label>
+            <select id="nCtx">
+              <option value="2048">2,048 tokens — smallest memory</option>
+              <option value="4096">4,096 tokens — default</option>
+              <option value="8192">8,192 tokens — long notes</option>
+              <option value="16384">16,384 tokens — very long</option>
+              <option value="32768">32,768 tokens — max (needs lots of RAM)</option>
+            </select>
+            <p class="desc" style="margin:0.5rem 0 0">Bigger context holds longer chats and pastes, but needs more memory. Takes effect the next time the model loads.</p>
+          </div>
+          <div class="field">
+            <label class="label" for="maxTokens">Max reply length (<span id="maxTokensVal">512</span> tokens)</label>
+            <input type="range" id="maxTokens" min="64" max="4096" step="64">
+          </div>
+          <div class="field">
+            <label class="label" for="temperature">Creativity (<span id="temperatureVal">0.7</span>)</label>
+            <input type="range" id="temperature" min="0" max="2" step="0.1">
+          </div>
         </div>
       </section>
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="settings.js?v=3"></script>
+  <script src="settings.js?v=4"></script>
 </body>
 </html>

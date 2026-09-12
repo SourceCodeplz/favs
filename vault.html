@@ -18,7 +18,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=7">
 <link rel="stylesheet" href="vault.css?v=1">
 </head>
 <body class="vault-body">
@@ -35,7 +35,7 @@
       <button type="button" class="btn danger" id="clipClear">Delete all</button>
     </div>
     <div id="clipList" class="clip-list"></div>
-    <p class="vault-empty" id="clipEmpty" hidden>No clips yet. Paste something in the box on the start page and hit <kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</p>
+    <p class="vault-empty" id="clipEmpty" hidden>No clips yet. Write something in the box on the start page and hit Save (<kbd>Ctrl</kbd> + <kbd>S</kbd>).</p>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="vault.js?v=1"></script>
