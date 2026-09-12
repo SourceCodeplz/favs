@@ -335,7 +335,11 @@
           history.push({ role: 'assistant', content: text });
           (function (finalText, b) { addUseButton(b, function () { return finalText; }); })(text, bubble);
           var secs = ((performance.now() - started) / 1000).toFixed(1);
-          setStatus('Done locally in ' + secs + 's' + (steps ? ' after ' + steps + ' tool step' + (steps === 1 ? '' : 's') : '') + '.', 'ok');
+          if (steps) {
+            setStatus('Done locally in ' + secs + 's after ' + steps + ' tool step' + (steps === 1 ? '' : 's') + '.', 'ok');
+          } else {
+            setStatus('Done locally in ' + secs + 's without using the shell — the model answered directly instead of calling execute_bash. The terminal below still runs bash for real; try a bigger model or rephrase as an explicit step-by-step instruction.', '');
+          }
           break;
         }
         // Echo the assistant turn (with its tool calls) so the next
@@ -379,6 +383,7 @@
             };
           }
           addToolBubble(command, result);
+          termLog(command, result);
           var content = 'exit code: ' + result.exitCode + '\n';
           if (result.written && result.written.length) {
             content += 'files written: ' + result.written.join(', ') + '\n';
@@ -702,9 +707,101 @@
   function onAgentEvent(ev) {
     var d = (ev && ev.detail) || {};
     setFolderUI(d);
+    setAgentStatus(d);
     if (d.status === 'ready' || d.status === 'error' || d.status === 'starting') {
       if (state !== 'generating') setStatus(d.message || '', d.status === 'error' ? 'err' : d.status === 'ready' ? 'ok' : '');
     }
+    if (d.status === 'ready' && !selfTestDone && isAgentReady()) {
+      selfTestDone = true;
+      agentSelfTest();
+    }
+    if (d.status === 'closed' || d.status === 'error' || d.status === 'idle') {
+      selfTestDone = false;
+    }
+  }
+
+  function setAgentStatus(d) {
+    var el = $('agentStatus');
+    if (!el) return;
+    var term = $('agentTerm');
+    if (!d || d.status === 'closed' || d.status === 'idle') {
+      el.textContent = 'Sandbox: off — press Folder to attach a directory.';
+      el.className = 'agent-status';
+      if (term) term.setAttribute('hidden', '');
+      return;
+    }
+    if (d.status === 'starting') {
+      el.textContent = 'Sandbox: starting… ' + (d.message || '');
+      el.className = 'agent-status busy';
+      if (term) term.setAttribute('hidden', '');
+      return;
+    }
+    if (d.status === 'error') {
+      el.textContent = 'Sandbox: failed — ' + (d.message || 'unknown error');
+      el.className = 'agent-status err';
+      if (term) term.setAttribute('hidden', '');
+      return;
+    }
+    if (d.status === 'ready') {
+      el.textContent = 'Sandbox: ready — "' + (d.folderName || '') + '" (' + (d.fileCount || 0) + ' files). Model tool: execute_bash · terminal below runs shell directly.';
+      el.className = 'agent-status ok';
+      if (term) term.removeAttribute('hidden');
+    }
+  }
+
+  // Visible console: every shell execution (model-driven or manual) lands
+  // here, opencode-style. Text-only DOM (textContent) — no HTML injection.
+  function termLog(command, result, tag) {
+    var log = $('agentTermLog');
+    if (!log) return;
+    function line(cls, text) {
+      var div = document.createElement('div');
+      div.className = 'agent-term-line' + (cls ? ' ' + cls : '');
+      div.textContent = text;
+      log.appendChild(div);
+    }
+    if (tag) line('tag', tag);
+    line('cmd', '$ ' + command);
+    var body = '';
+    if (result.stdout) body += result.stdout;
+    if (result.stderr) body += (body ? '\n' : '') + '[stderr]\n' + result.stderr;
+    if (!body) body = '(no output)';
+    if (body.length > 2000) body = body.slice(0, 2000) + '\n…[truncated]';
+    line(result.ok ? 'out' : 'err', body);
+    if (result.written && result.written.length) line('files', 'wrote: ' + result.written.join(', '));
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function runTermCommand(command) {
+    if (!window.favsAgent || !window.favsAgent.isReady()) {
+      termLog(command, { exitCode: 1, ok: false, stdout: '', stderr: 'sandbox is not ready', written: [] });
+      return;
+    }
+    termLog(command, { exitCode: 0, ok: true, stdout: '…running', stderr: '', written: [] });
+    var log = $('agentTermLog');
+    var placeholder = log ? log.lastChild : null;
+    var result;
+    try {
+      result = await window.favsAgent.runBash(command);
+    } catch (e) {
+      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [] };
+    }
+    if (placeholder && placeholder.parentNode === log) log.removeChild(placeholder);
+    termLog(command, result);
+  }
+
+  // Proves Wasmer is really running, independent of the model: runs a real
+  // shell command the moment the sandbox becomes ready.
+  var selfTestDone = false;
+  async function agentSelfTest() {
+    if (!window.favsAgent || !window.favsAgent.isReady()) return;
+    var result;
+    try {
+      result = await window.favsAgent.runBash('echo sandbox-ok && pwd && ls /workspace | head -20');
+    } catch (e) {
+      result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [] };
+    }
+    termLog('echo sandbox-ok && pwd && ls /workspace | head -20', result, 'self-test — real WASIX shell, no model involved');
   }
 
   function init() {
@@ -738,6 +835,34 @@
       });
     }
     window.addEventListener('favs:agent', onAgentEvent);
+    var termRun = $('agentTermRun');
+    var termInput = $('agentTermInput');
+    if (termRun && termInput) {
+      (function () {
+        var busy = false;
+        function run() {
+          if (busy) return;
+          var cmd = termInput.value;
+          if (!cmd || !cmd.trim()) return;
+          busy = true;
+          termRun.disabled = true;
+          runTermCommand(cmd).then(function () {
+            termInput.value = '';
+            termInput.focus();
+          }).catch(function () {}).then(function () {
+            busy = false;
+            termRun.disabled = false;
+          });
+        }
+        termRun.addEventListener('click', run);
+        termInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            run();
+          }
+        });
+      })();
+    }
 
     window.addEventListener('favs:send', function (ev) {
       var text = ev && ev.detail && typeof ev.detail.text === 'string' ? ev.detail.text : '';

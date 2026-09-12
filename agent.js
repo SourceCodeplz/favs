@@ -19,7 +19,6 @@
 import { Wasmer } from './vendor/wasmer/dist/index.js';
 
 var PACKAGES = ['sharrattj/bash', 'sharrattj/coreutils'];
-var SHELL = 'bash';
 var WORKSPACE = '/workspace';
 var CMD_TIMEOUT_MS = 30000;
 var MODEL_OUTPUT_CHARS = 8000; // truncation budget per stream for tool results
@@ -266,23 +265,50 @@ async function pickFolder() {
   var skipped = stats.skipped ? ' ' + stats.skipped + ' binary/large file(s) skipped.' : '';
 
   setStatus('starting', 'Starting sandbox — downloading shell packages on first run (one-time, ~10MB)…');
+  var shellRef = null;
   try {
     agent.wasmer = new Wasmer();
+    try {
+      await agent.wasmer.ready();
+    } catch (initErr) {
+      throw new Error('runtime init failed: ' + (initErr && initErr.message ? initErr.message : String(initErr)));
+    }
+    // Resolve the real shell command instead of guessing its name.
+    var bashPkg;
+    try {
+      bashPkg = await agent.wasmer.packages.load('sharrattj/bash');
+    } catch (e) {
+      throw new Error('could not download sharrattj/bash from the Wasmer registry (network?): ' + (e && e.message ? e.message : String(e)));
+    }
+    var shellName = (bashPkg && bashPkg.entrypoint) || (bashPkg && bashPkg.commands && bashPkg.commands[0]);
+    if (!shellName) throw new Error('sharrattj/bash exports no commands');
+    try {
+      shellRef = bashPkg.command(shellName);
+    } catch (e) {
+      shellRef = shellName;
+    }
+    try {
+      await agent.wasmer.packages.load('sharrattj/coreutils');
+    } catch (e) {
+      throw new Error('could not download sharrattj/coreutils from the Wasmer registry (network?): ' + (e && e.message ? e.message : String(e)));
+    }
     agent.sandbox = await agent.wasmer.sandboxes.create({
       packages: PACKAGES,
-      shell: SHELL,
+      shell: shellRef,
       files: files
     });
   } catch (e) {
     agent.wasmer = null;
     agent.sandbox = null;
     setStatus('error', 'Sandbox failed to start: ' + (e && e.message ? e.message : String(e)));
+    try { console.warn('[favs-agent] sandbox start failed:', e); } catch (warnErr) {}
     return;
   }
   // Snapshot what the sandbox actually holds (normalizes encoding).
   agent.shadow = {};
   var keys = Object.keys(files);
   for (var i = 0; i < keys.length; i++) agent.shadow[keys[i]] = files[keys[i]];
+  try { console.log('[favs-agent] sandbox ready, shell resolved, ' + stats.files + ' files'); } catch (logErr) {}
   setStatus('ready', 'Agent ready — "' + agent.folderName + '" (' + stats.files + ' files)' + note + '.' + skipped + ' Ask me to explore or edit the code.');
 }
 

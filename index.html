@@ -18,7 +18,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body class="home">
   <div class="topbar">
@@ -51,11 +51,20 @@
       </div>
     </div>
     <p class="chat-sub" id="chatStatus" role="status" aria-live="polite">Runs 100% on your device. The model downloads once, then stays cached.</p>
+    <p class="agent-status" id="agentStatus" role="status" aria-live="polite">Sandbox: off — press Folder to attach a directory.</p>
+    <div class="agent-term" id="agentTerm" hidden>
+      <div class="agent-term-log" id="agentTermLog" aria-live="polite"></div>
+      <div class="agent-term-row">
+        <span class="agent-term-ps" aria-hidden="true">$</span>
+        <input id="agentTermInput" type="text" placeholder="Run bash in the sandbox — no model involved" aria-label="Run bash in the sandbox" autocomplete="off" spellcheck="false">
+        <button type="button" id="agentTermRun">Run</button>
+      </div>
+    </div>
     <div class="chat-progress" id="chatProgress" hidden><span id="chatProgressBar"></span></div>
     <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
   </section>
   <script src="app.js?v=5"></script>
-  <script type="module" src="agent.js?v=1"></script>
-  <script type="module" src="chat.js?v=6"></script>
+  <script type="module" src="agent.js?v=2"></script>
+  <script type="module" src="chat.js?v=7"></script>
 </body>
 </html>
