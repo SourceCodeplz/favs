@@ -14,7 +14,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body class="home">
   <div class="topbar">
@@ -26,7 +26,27 @@
     <select class="engine-select" id="engineSelect" hidden aria-label="Search engine"></select>
     <button type="submit">Search</button>
   </form>
-  <nav class="bookmarks" id="bookmarks" hidden aria-label="Bookmarks"></nav>
-  <script src="app.js?v=2"></script>
+  <nav class="bookmarks" id="bookmarks" aria-label="Bookmarks"></nav>
+  <div class="modal-backdrop" id="bookmarkModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bookmarkModalTitle">
+      <h2 id="bookmarkModalTitle">Add bookmark</h2>
+      <div class="modal-field">
+        <label for="bookmarkTitle">Title</label>
+        <input type="text" id="bookmarkTitle" maxlength="80" placeholder="My favorite site" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="bookmarkUrl">URL</label>
+        <input type="url" id="bookmarkUrl" placeholder="https://example.com" inputmode="url" autocomplete="off">
+      </div>
+      <p class="modal-error" id="bookmarkError" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="bookmarkDelete" hidden>Delete</button>
+        <span class="modal-spacer"></span>
+        <button type="button" class="btn secondary" id="bookmarkCancel">Cancel</button>
+        <button type="button" class="btn" id="bookmarkSave">Add</button>
+      </div>
+    </div>
+  </div>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

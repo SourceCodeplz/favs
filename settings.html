@@ -12,8 +12,8 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=1">
-<link rel="stylesheet" href="settings.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="settings.css?v=2">
 </head>
 <body class="settings-body">
   <header class="settings-topbar">
@@ -74,28 +74,25 @@
 
       <section class="settings-section" data-section-panel="bookmarks" hidden>
         <h2>Bookmarks</h2>
-        <p class="desc">Chrome-style bookmarks shown on the start page.</p>
+        <p class="desc">Add bookmarks from the start page. These settings apply to all bookmarks.</p>
         <div class="card">
           <div class="field">
-            <label class="label" for="bookmarkTitle">Title</label>
-            <input type="text" id="bookmarkTitle" maxlength="80" placeholder="My favorite site">
+            <label class="label" for="bookmarkIconSize">Icon size (<span id="bookmarkIconSizeVal">32</span>px)</label>
+            <input type="range" id="bookmarkIconSize" min="20" max="64" step="1">
           </div>
           <div class="field">
-            <label class="label" for="bookmarkUrl">URL</label>
-            <input type="url" id="bookmarkUrl" placeholder="https://example.com">
-          </div>
-          <div class="btn-row">
-            <button class="btn" id="bookmarkAdd" type="button">Add bookmark</button>
+            <label class="label" for="bookmarkTextSize">Text size (<span id="bookmarkTextSizeVal">12</span>px)</label>
+            <input type="range" id="bookmarkTextSize" min="10" max="18" step="1">
           </div>
         </div>
         <div class="card">
-          <p class="desc" id="bookmarkEmpty">No bookmarks yet. Add your first one above.</p>
-          <div id="bookmarkList"></div>
+          <label class="check-row"><input type="checkbox" id="bookmarkNoReferrer"> Hide referrer when opening bookmarks</label>
+          <p class="desc">When on, bookmark links use <code>rel="noopener noreferrer"</code> and send no referrer. When off, sites you open can see the start page address.</p>
         </div>
       </section>
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="settings.js?v=1"></script>
+  <script src="settings.js?v=2"></script>
 </body>
 </html>

@@ -197,9 +197,13 @@ body {
   gap: 0.5rem 0.25rem;
   width: min(92vw, 640px);
   margin-top: 1.5rem;
+  --bookmark-icon-size: 32px;
+  --bookmark-text-size: 12px;
 }
 
-.bookmarks[hidden] { display: none; }
+.bookmark-wrap {
+  position: relative;
+}
 
 .bookmark {
   display: flex;
@@ -211,17 +215,21 @@ body {
   border-radius: 12px;
   color: var(--text);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: var(--bookmark-text-size, 0.75rem);
   line-height: 1.2;
   text-align: center;
   overflow: hidden;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .bookmark:hover { background: var(--card-bg); }
 
 .bookmark img {
-  width: 32px;
-  height: 32px;
+  width: var(--bookmark-icon-size, 32px);
+  height: var(--bookmark-icon-size, 32px);
   border-radius: 50%;
   background: var(--field-bg);
 }
@@ -231,4 +239,124 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bookmark-add .bookmark-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bookmark-icon-size, 32px);
+  height: var(--bookmark-icon-size, 32px);
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px dashed var(--card-border);
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.bookmark-menu {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: var(--field-bg);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bookmark-wrap:hover .bookmark-menu,
+.bookmark-wrap:focus-within .bookmark-menu { display: inline-flex; }
+
+.bookmark-menu:hover { color: var(--text); }
+
+/* ---- Bookmark add/edit modal (start page) ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 50;
+}
+
+.modal-backdrop[hidden] { display: none; }
+
+.modal {
+  width: min(92vw, 400px);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.modal h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+
+.modal-field { margin-bottom: 0.9rem; }
+
+.modal-field label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.modal-field input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--field-text);
+  outline: none;
+}
+
+.modal-field input:focus { border-color: var(--focus-border); }
+
+.modal-error {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #d93025;
+}
+
+.modal-error[hidden] { display: none; }
+
+.modal-actions { display: flex; align-items: center; gap: 0.5rem; }
+
+.modal-spacer { flex: 1; }
+
+.modal .btn {
+  display: inline-block;
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.modal .btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--card-border);
+}
+
+.modal .btn.danger {
+  background: transparent;
+  color: #d93025;
+  border-color: #d93025;
 }

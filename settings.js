@@ -23,8 +23,19 @@
       theme: 'system',
       engines: { google: true },
       defaultEngine: 'google',
-      bookmarks: []
+      bookmarks: [],
+      bookmarkIconSize: 32,
+      bookmarkTextSize: 12,
+      bookmarkNoReferrer: true
     };
+  }
+
+  function clampNumber(v, min, max, fallback) {
+    var n = Number(v);
+    if (!isFinite(n)) return fallback;
+    if (n < min) return min;
+    if (n > max) return max;
+    return Math.round(n);
   }
 
   function loadSettings() {
@@ -38,7 +49,10 @@
         theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
         engines: parsed.engines && typeof parsed.engines === 'object' ? parsed.engines : base.engines,
         defaultEngine: typeof parsed.defaultEngine === 'string' ? parsed.defaultEngine : base.defaultEngine,
-        bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : []
+        bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
+        bookmarkIconSize: clampNumber(parsed.bookmarkIconSize, 20, 64, base.bookmarkIconSize),
+        bookmarkTextSize: clampNumber(parsed.bookmarkTextSize, 10, 18, base.bookmarkTextSize),
+        bookmarkNoReferrer: parsed.bookmarkNoReferrer === false ? false : true
       };
     } catch (e) {
       return defaultSettings();
@@ -144,68 +158,21 @@
     }
   }
 
-  function renderBookmarks(settings) {
-    var list = document.getElementById('bookmarkList');
-    var empty = document.getElementById('bookmarkEmpty');
-    if (!list) return;
-    list.innerHTML = '';
-    if (!settings.bookmarks.length) {
-      if (empty) empty.hidden = false;
-      return;
+  function renderBookmarkSettings(settings) {
+    var icon = document.getElementById('bookmarkIconSize');
+    var iconVal = document.getElementById('bookmarkIconSizeVal');
+    var text = document.getElementById('bookmarkTextSize');
+    var textVal = document.getElementById('bookmarkTextSizeVal');
+    var noRef = document.getElementById('bookmarkNoReferrer');
+    if (icon) {
+      icon.value = settings.bookmarkIconSize;
+      if (iconVal) iconVal.textContent = settings.bookmarkIconSize;
     }
-    if (empty) empty.hidden = true;
-    settings.bookmarks.forEach(function (b, idx) {
-      var row = document.createElement('div');
-      row.className = 'bookmark-row';
-      var host = b.url;
-      try { host = new URL(b.url).hostname; } catch (e) {}
-      var img = document.createElement('img');
-      img.alt = '';
-      img.src = 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(host) + '&sz=64';
-      var grow = document.createElement('div');
-      grow.className = 'grow';
-      grow.innerHTML = '<strong>' + escapeHtml(b.title || b.url) + '</strong><small>' + escapeHtml(b.url) + '</small>';
-      var up = document.createElement('button');
-      up.className = 'btn secondary';
-      up.textContent = '↑';
-      up.title = 'Move up';
-      up.disabled = idx === 0;
-      up.addEventListener('click', function () {
-        if (idx === 0) return;
-        var tmp = settings.bookmarks[idx - 1];
-        settings.bookmarks[idx - 1] = settings.bookmarks[idx];
-        settings.bookmarks[idx] = tmp;
-        saveSettings(settings);
-        renderBookmarks(settings);
-      });
-      var down = document.createElement('button');
-      down.className = 'btn secondary';
-      down.textContent = '↓';
-      down.title = 'Move down';
-      down.disabled = idx === settings.bookmarks.length - 1;
-      down.addEventListener('click', function () {
-        if (idx >= settings.bookmarks.length - 1) return;
-        var tmp = settings.bookmarks[idx + 1];
-        settings.bookmarks[idx + 1] = settings.bookmarks[idx];
-        settings.bookmarks[idx] = tmp;
-        saveSettings(settings);
-        renderBookmarks(settings);
-      });
-      var del = document.createElement('button');
-      del.className = 'btn danger';
-      del.textContent = 'Delete';
-      del.addEventListener('click', function () {
-        settings.bookmarks.splice(idx, 1);
-        saveSettings(settings);
-        renderBookmarks(settings);
-      });
-      row.appendChild(img);
-      row.appendChild(grow);
-      row.appendChild(up);
-      row.appendChild(down);
-      row.appendChild(del);
-      list.appendChild(row);
-    });
+    if (text) {
+      text.value = settings.bookmarkTextSize;
+      if (textVal) textVal.textContent = settings.bookmarkTextSize;
+    }
+    if (noRef) noRef.checked = settings.bookmarkNoReferrer !== false;
   }
 
   function switchSection(name) {
@@ -264,21 +231,31 @@
       });
     }
 
-    // Bookmarks add
-    renderBookmarks(settings);
-    var addBtn = document.getElementById('bookmarkAdd');
-    if (addBtn) {
-      addBtn.addEventListener('click', function () {
-        var t = document.getElementById('bookmarkTitle');
-        var u = document.getElementById('bookmarkUrl');
-        var url = normalizeUrl(u ? u.value : '');
-        if (!url) { toast('Enter a URL'); return; }
-        try { new URL(url); } catch (e) { toast('Invalid URL'); return; }
-        settings.bookmarks.push({ id: 'b' + Date.now(), title: (t && t.value.trim()) || url, url: url });
-        if (t) t.value = '';
-        if (u) u.value = '';
+    // Bookmarks: global appearance/behavior (add/edit happens on start page)
+    renderBookmarkSettings(settings);
+    var iconInput = document.getElementById('bookmarkIconSize');
+    if (iconInput) {
+      iconInput.addEventListener('input', function () {
+        settings.bookmarkIconSize = clampNumber(iconInput.value, 20, 64, defaultSettings().bookmarkIconSize);
+        var v = document.getElementById('bookmarkIconSizeVal');
+        if (v) v.textContent = settings.bookmarkIconSize;
         saveSettings(settings);
-        renderBookmarks(settings);
+      });
+    }
+    var textInput = document.getElementById('bookmarkTextSize');
+    if (textInput) {
+      textInput.addEventListener('input', function () {
+        settings.bookmarkTextSize = clampNumber(textInput.value, 10, 18, defaultSettings().bookmarkTextSize);
+        var v = document.getElementById('bookmarkTextSizeVal');
+        if (v) v.textContent = settings.bookmarkTextSize;
+        saveSettings(settings);
+      });
+    }
+    var noRefInput = document.getElementById('bookmarkNoReferrer');
+    if (noRefInput) {
+      noRefInput.addEventListener('change', function () {
+        settings.bookmarkNoReferrer = !!noRefInput.checked;
+        saveSettings(settings);
       });
     }
 
@@ -292,7 +269,7 @@
         if (nameInput) nameInput.value = settings.siteName;
         document.querySelectorAll('input[name="theme"]').forEach(function (r) { r.checked = r.value === settings.theme; });
         renderEngines(settings);
-        renderBookmarks(settings);
+        renderBookmarkSettings(settings);
       });
     }
   }
