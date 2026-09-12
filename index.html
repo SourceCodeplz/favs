@@ -18,7 +18,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body class="home">
   <div class="topbar">
@@ -42,6 +42,26 @@
     </div>
   </section>
   <p class="clip-status" id="clipStatus" role="status" aria-live="polite"></p>
+  <section class="chat" aria-label="Local AI chat">
+    <div class="chat-head">
+      <div class="chat-title">
+        <span class="chat-dot" id="chatDot" aria-hidden="true"></span>
+        <strong>Local chat</strong>
+        <span class="chat-model">LFM2.5-350M &middot; in-browser</span>
+      </div>
+      <div class="chat-head-actions">
+        <button type="button" class="chat-clear-btn" id="chatClear" hidden>Clear</button>
+        <button type="button" class="chat-load-btn" id="chatLoad">Download &amp; start</button>
+      </div>
+    </div>
+    <p class="chat-sub" id="chatStatus" role="status" aria-live="polite">Runs 100% on your device. One-time ~200MB download, then cached.</p>
+    <div class="chat-progress" id="chatProgress" hidden><span id="chatProgressBar"></span></div>
+    <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+    <form class="chat-row" id="chatForm" hidden>
+      <input id="chatInput" type="text" placeholder="Ask anything…" autocomplete="off" spellcheck="false" aria-label="Chat with local model" disabled>
+      <button type="submit" id="chatSend" disabled>Send</button>
+    </form>
+  </section>
   <div class="modal-backdrop" id="bookmarkModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bookmarkModalTitle">
       <h2 id="bookmarkModalTitle">Add bookmark</h2>
@@ -63,5 +83,6 @@
     </div>
   </div>
   <script src="app.js?v=4"></script>
+  <script type="module" src="chat.js?v=1"></script>
 </body>
 </html>
