@@ -97,6 +97,31 @@
     return msgs;
   }
 
+  // Report which backend is actually active (WebGPU vs CPU, thread count).
+  // On Firefox without JSPI, wllama silently falls back to slow CPU mode —
+  // surfacing it here tells the user exactly what to fix.
+  function backendInfo() {
+    var gpu = false;
+    var threads = 1;
+    try { gpu = !!wllama.isSupportWebGPU(); } catch (e) {}
+    try { threads = wllama.getNumThreads(); } catch (e) {}
+    return { gpu: gpu, label: (gpu ? 'WebGPU' : 'CPU') + ' · ' + threads + ' thread' + (threads === 1 ? '' : 's') };
+  }
+
+  function readyMessage() {
+    var info = backendInfo();
+    var msg = 'Ready — LFM2.5-350M locally (' + info.label + ').';
+    if (!info.gpu) {
+      var ua = navigator.userAgent || '';
+      if (/firefox|fxios/i.test(ua)) {
+        msg += ' Firefox: update to 153+ or set javascript.options.wasm_js_promise_integration=true in about:config, then restart for GPU speed.';
+      } else {
+        msg += ' WebGPU unavailable — Chrome/Edge give full GPU speed.';
+      }
+    }
+    return msg;
+  }
+
   async function loadModel() {
     if (state === 'loading' || state === 'generating') return;
     if (state === 'ready') return;
@@ -144,7 +169,7 @@
       setFormEnabled(true);
       var input = $('chatInput');
       if (input) input.placeholder = 'Ask anything… (runs locally)';
-      setStatus('Ready — LFM2.5-350M running locally in this tab.', 'ok');
+      setStatus(readyMessage(), 'ok');
     } catch (err) {
       state = 'idle';
       setDot('idle');

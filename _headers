@@ -1,0 +1,9 @@
+# Cross-origin isolation so wllama can use multi-threaded WASM
+# (SharedArrayBuffer) — 2-4x faster CPU inference where WebGPU is off.
+# `credentialless` (not `require-corp`) keeps cross-origin bookmark
+# favicons working. Do not remove: without these, WASM falls back
+# to a single thread. Browsers that don't understand the values
+# simply ignore them (same as today).
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless

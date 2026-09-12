@@ -13,13 +13,14 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=6`, `settings.css?v=3`, `vault.css?v=1`, `app.js?v=4`, `settings.js?v=3`, `vault.js?v=1`, `chat.js?v=2`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=6`, `settings.css?v=3`, `vault.css?v=1`, `app.js?v=4`, `settings.js?v=3`, `vault.js?v=1`, `chat.js?v=3`).
 
 ## Vendoring (no CDN libraries)
 
 - NEVER load third-party libraries from CDNs — download the pinned version into `vendor/` and serve it same-origin. The only third-party host contacted at runtime is `huggingface.co`, for model weights.
 - Currently vendored: `@wllama/wllama@3.6.1` (`vendor/wllama/index.js` + `wllama.wasm`) and `@wllama/wllama-compat@3.6.1` (`vendor/wllama-compat/`, Safari fallback). `chat.js` references these via relative paths.
 - When upgrading a vendored file, bump the `?v=` on the `chat.js` script tag in `index.html` (the vendor URLs live inside `chat.js`, so its new URL busts the whole chain).
+- Cross-origin isolation (`_headers`: COOP/COEP) is required for multi-threaded WASM — do not remove it.
 - Bookmark links send no referrer (`rel="noopener noreferrer"` + `referrerPolicy="no-referrer"` in `app.js`).
 - Keep the pre-CSS theme snippet in sync between `index.html` and `settings.html` if the storage key changes.
 
