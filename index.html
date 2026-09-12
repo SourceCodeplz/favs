@@ -1,1 +1,23 @@
-favs.eu.org
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAVS</title>
+<style>
+  body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  h1 { font-size: 2rem; margin-bottom: 1.5rem; }
+  form { display: flex; width: min(90vw, 500px); }
+  input { flex: 1; padding: 0.75rem 1rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 24px 0 0 24px; outline: none; }
+  input:focus { border-color: #4285f4; }
+  button { padding: 0 1.25rem; border: 1px solid #4285f4; background: #4285f4; color: white; border-radius: 0 24px 24px 0; cursor: pointer; font-size: 1rem; }
+</style>
+</head>
+<body>
+  <h1>favs.eu.org</h1>
+  <form action="https://www.google.com/search" method="GET">
+    <input type="text" name="q" placeholder="Search Google..." autofocus>
+    <button type="submit">Search</button>
+  </form>
+</body>
+</html>
