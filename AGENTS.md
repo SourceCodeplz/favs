@@ -5,6 +5,11 @@ New-tab start page at https://favs.eu.org. Static files: `index.html`, `settings
 Repo: `SourceCodeplz/favs`, branch `main`. Local path: `C:\Users\danie\Documents\favs`.
 Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no build step.
 
+## Workflow
+
+- ALWAYS commit and push to `main` by yourself after making changes — do not wait for the user to say "push".
+- Page-to-page links (`index.html` ↔ `settings.html`) must be plain, with NO `?v=` query. `?v=` is only for CSS/JS asset references.
+
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
