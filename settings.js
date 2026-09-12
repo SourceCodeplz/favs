@@ -272,6 +272,15 @@
         renderBookmarkSettings(settings);
       });
     }
+
+    // PWA: register the offline service worker (sw.js must stay unversioned).
+    try {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    } catch (e) {}
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

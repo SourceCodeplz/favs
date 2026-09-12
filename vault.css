@@ -1,0 +1,209 @@
+/* Vault page layout. Shared variables live in styles.css. */
+.vault-body {
+  display: block;
+  min-height: 100vh;
+}
+
+.vault-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vault-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+.vault-main .desc {
+  margin: 0 0 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.vault-main .desc code {
+  font-size: 0.85em;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 0.05rem 0.35rem;
+}
+
+.vault-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.vault-toolbar input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.94rem;
+  border-radius: 12px;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  color: var(--field-text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vault-toolbar input[type="search"]:focus {
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.vault-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vault-toolbar .btn.secondary {
+  background: var(--field-bg);
+  color: var(--text);
+  border-color: var(--card-border);
+}
+
+.vault-toolbar .btn.secondary:hover { background: var(--card-bg); }
+
+.vault-toolbar .btn.danger {
+  background: transparent;
+  color: #d93025;
+  border-color: rgba(217, 48, 37, 0.5);
+}
+
+.vault-toolbar .btn.danger:hover { background: rgba(217, 48, 37, 0.1); border-color: #d93025; }
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.clip-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  animation: clip-in 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes clip-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.clip-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.clip-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.clip-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.mini-btn {
+  border: 1px solid var(--card-border);
+  background: var(--field-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mini-btn:hover { background: var(--bg); border-color: var(--focus-border); }
+
+.clip-text {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.clip-text a { color: var(--accent); overflow-wrap: break-word; }
+
+.clip-image {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  object-fit: contain;
+  background: var(--bg);
+}
+
+.clip-file-row { margin-top: 0.5rem; font-size: 0.88rem; }
+
+.clip-file-row a { color: var(--accent); }
+
+.vault-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  margin-top: 2.5rem;
+  line-height: 1.6;
+}
+
+.vault-empty[hidden] { display: none; }
+
+.vault-empty kbd {
+  font-family: inherit;
+  font-size: 0.8rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 0.05rem 0.35rem;
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.6rem 1.15rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 550;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s, transform 0.22s;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 520px) {
+  .vault-toolbar { flex-wrap: wrap; }
+  .vault-toolbar input[type="search"] { flex-basis: 100%; }
+}

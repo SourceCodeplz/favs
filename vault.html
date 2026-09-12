@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vault — FAVS</title>
+<meta name="description" content="FAVS vault — your private saved clips, stored only in this browser.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#202124">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234285f4'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+  // Apply saved theme before CSS to avoid a flash. Keep in sync with app.js.
+  try {
+    var s = JSON.parse(localStorage.getItem('favs.settings.v1') || '{}');
+    if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="vault.css?v=1">
+</head>
+<body class="vault-body">
+  <header class="settings-topbar">
+    <a class="back" href="index.html">&larr; Start page</a>
+    <h1>Vault</h1>
+    <span class="vault-count" id="clipCount"></span>
+  </header>
+  <main class="vault-main">
+    <p class="desc">Private clips saved from the start page. Stored only in this browser (<code>localStorage</code>) — nothing leaves your device.</p>
+    <div class="vault-toolbar">
+      <input type="search" id="clipSearch" placeholder="Search clips…" autocomplete="off" aria-label="Search clips">
+      <button type="button" class="btn secondary" id="clipExport">Export</button>
+      <button type="button" class="btn danger" id="clipClear">Delete all</button>
+    </div>
+    <div id="clipList" class="clip-list"></div>
+    <p class="vault-empty" id="clipEmpty" hidden>No clips yet. Paste something in the box on the start page and hit <kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</p>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="vault.js?v=1"></script>
+</body>
+</html>

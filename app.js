@@ -3,6 +3,8 @@
   'use strict';
 
   var STORAGE_KEY = 'favs.settings.v1';
+  var CLIPS_KEY = 'favs.clips.v1';
+  var MAX_FILE_BYTES = 1500000; // ~1.5MB per pasted file; localStorage quota is ~5MB total.
 
   var ENGINES = [
     { id: 'google', name: 'Google', template: 'https://www.google.com/search?q=%s', placeholder: 'Search Google...' },
@@ -108,6 +110,136 @@
 
   function linkRel(settings) {
     return settings.bookmarkNoReferrer ? 'noopener noreferrer' : 'noopener';
+  }
+
+  function loadClips() {
+    try {
+      var raw = localStorage.getItem(CLIPS_KEY);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function storeClips(clips) {
+    localStorage.setItem(CLIPS_KEY, JSON.stringify(clips));
+  }
+
+  function addClip(item) {
+    var clips = loadClips();
+    clips.unshift(item);
+    storeClips(clips);
+    return clips.length;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error('read-failed')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function initClipSaver() {
+    var input = document.getElementById('clipInput');
+    var saveBtn = document.getElementById('clipSave');
+    var statusEl = document.getElementById('clipStatus');
+    var openLink = document.getElementById('clipOpen');
+    if (!input || !saveBtn) return;
+
+    var statusTimer = null;
+    function status(msg, kind) {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.className = 'clip-status' + (kind ? ' ' + kind : '');
+      if (statusTimer) clearTimeout(statusTimer);
+      if (msg) statusTimer = setTimeout(function () { status('', ''); }, 4000);
+    }
+
+    function refreshCount() {
+      if (!openLink) return;
+      var n = loadClips().length;
+      openLink.textContent = n ? 'Vault (' + n + ') \u2192' : 'Vault \u2192';
+    }
+
+    function saveText() {
+      var text = input.value;
+      if (!text || !text.trim()) { status('Write or paste something first.', 'err'); input.focus(); return; }
+      try {
+        addClip({ id: 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36), kind: 'text', text: text, createdAt: Date.now() });
+      } catch (e) {
+        status('Vault is full — delete old clips to free space.', 'err');
+        return;
+      }
+      input.value = '';
+      status('Saved to your private vault.', 'ok');
+      refreshCount();
+      input.focus();
+    }
+
+    function saveFiles(files) {
+      var list = [];
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (f && f.size > 0) list.push(f);
+      }
+      if (!list.length) return;
+      var chain = Promise.resolve();
+      var saved = 0;
+      list.forEach(function (f) {
+        chain = chain.then(function () {
+          if (f.size > MAX_FILE_BYTES) {
+            status('"' + (f.name || 'file') + '" is too big for the local vault (max ~1.5MB).', 'err');
+            return null;
+          }
+          return readFileAsDataUrl(f).then(function (dataUrl) {
+            try {
+              addClip({ id: 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36), kind: 'file', name: f.name || 'pasted-file', mime: f.type || 'application/octet-stream', size: f.size, dataUrl: dataUrl, createdAt: Date.now() });
+              saved++;
+            } catch (e) {
+              status('Vault is full — delete old clips to free space.', 'err');
+            }
+          }, function () {
+            status('Could not read pasted file.', 'err');
+          });
+        });
+      });
+      chain.then(function () {
+        if (saved) {
+          status(saved === 1 ? 'File saved to your private vault.' : saved + ' files saved to your private vault.', 'ok');
+          refreshCount();
+        }
+      });
+    }
+
+    saveBtn.addEventListener('click', saveText);
+    input.addEventListener('keydown', function (ev) {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+        ev.preventDefault();
+        saveText();
+      }
+    });
+    input.addEventListener('paste', function (ev) {
+      var dt = ev.clipboardData;
+      if (dt && dt.files && dt.files.length) {
+        // Let text land in the box too; files are saved as vault attachments.
+        saveFiles(dt.files);
+      }
+    });
+    refreshCount();
+  }
+
+  function registerServiceWorker() {
+    try {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    } catch (e) {}
   }
 
   function renderBookmarks(settings, onAdd, onEdit) {
@@ -310,6 +442,8 @@
     function openEdit(b) { if (modalCtl) modalCtl.open('edit', b); }
     var modalCtl = initBookmarkModal(settings, rerenderBookmarks);
     rerenderBookmarks();
+    initClipSaver();
+    registerServiceWorker();
   }
 
   if (document.readyState === 'loading') {
