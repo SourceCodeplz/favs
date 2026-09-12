@@ -88,6 +88,8 @@
       var a = document.createElement('a');
       a.className = 'bookmark';
       a.href = b.url;
+      a.rel = 'noopener noreferrer';
+      a.referrerPolicy = 'no-referrer';
       var title = b.title || b.url;
       a.title = title;
       var img = document.createElement('img');

@@ -8,7 +8,8 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in every HTML reference whenever CSS/JS/HTML changes (current: `v=1`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=1`, `settings.css?v=1`, `app.js?v=2`, `settings.js?v=1`).
+- Bookmark links send no referrer (`rel="noopener noreferrer"` + `referrerPolicy="no-referrer"` in `app.js`).
 - Keep the pre-CSS theme snippet in sync between `index.html` and `settings.html` if the storage key changes.
 
 ## Settings (localStorage `favs.settings.v1`)
