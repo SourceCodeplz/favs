@@ -24,6 +24,7 @@ import { Wasmer } from './vendor/wasmer/dist/index.js';
 // on every shell invocation with current SDK versions (see wasmer-sdk#463).
 var PACKAGES = ['wasmer/bash'];
 var WORKSPACE = '/workspace';
+var AGENT_VERSION = 6; // bump on every agent.js change; shown in console + self-test tag
 var CMD_TIMEOUT_MS = 30000;
 var MODEL_OUTPUT_CHARS = 8000; // truncation budget per stream for tool results
 
@@ -201,35 +202,61 @@ async function runShellDirect(script) {
 }
 
 // Enumerate workspace files. The fs API is preferred, but some SDK builds
-// reject readDir on the workspace root itself (`entry not found` on an empty
-// folder); the guest shell always sees the truth, so fall back to `find`.
+// reject readDir on the workspace root itself (`entry not found`); the guest
+// shell always sees the truth, so fall back to shell enumeration.
+// Three tiers: fs -> `find` -> `ls -R` (parsed). Only reports listError when
+// every method actually FAILED — empty results mean an empty workspace.
 async function listSandboxPaths(fs) {
   var out = [];
+  var fsMsg = null;
   try {
     await listSandboxFiles(fs, WORKSPACE, out);
     return { paths: out, listError: null };
   } catch (fsErr) {
-    var fsMsg = fsErr && fsErr.message ? fsErr.message : String(fsErr);
-    try { console.warn('[favs-agent] fs listing failed, trying shell find:', fsMsg); } catch (warnErr) {}
-    var output;
-    try {
-      output = await runShellDirect('find /workspace -type f 2>/dev/null | head -' + (MAX_FILES * 2));
-    } catch (shellErr) {
-      return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
+    fsMsg = fsErr && fsErr.message ? fsErr.message : String(fsErr);
+    try { console.warn('[favs-agent] fs listing failed, trying shell:', fsMsg); } catch (warnErr) {}
+  }
+  // Tier 2: find. `command -v` guards the pipe so a missing find binary
+  // can't masquerade as "no files" (head would exit 0 on empty input).
+  try {
+    var found = await runShellDirect('command -v find >/dev/null && find /workspace -type f 2>/dev/null | head -' + (MAX_FILES * 2));
+    var ftext = '';
+    try { ftext = found.stdout ? found.stdout.text() : ''; } catch (textErr) {}
+    if (found.ok) {
+      var lines = String(ftext).split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].replace(/\r$/, '');
+        if (!line) continue;
+        if (line.indexOf(WORKSPACE + '/') === 0) out.push(line.slice(WORKSPACE.length + 1));
+        else if (line.charAt(0) !== '/') out.push(line);
+      }
+      return { paths: out, listError: null };
     }
-    var text = '';
-    try { text = output.stdout ? output.stdout.text() : ''; } catch (textErr) {}
-    var lines = String(text).split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].replace(/\r$/, '');
-      if (!line) continue;
-      if (line.indexOf(WORKSPACE + '/') === 0) out.push(line.slice(WORKSPACE.length + 1));
-      else if (line.charAt(0) !== '/') out.push(line);
-    }
-    if (!output.ok && !out.length) {
-      return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
+  } catch (shellErr) {}
+  // Tier 3: parse `ls -R`. Headers end with ':'; -p marks dirs with '/'.
+  // (Filenames containing newlines can't round-trip here — accepted edge.)
+  try {
+    var listed = await runShellDirect('ls -Rp /workspace 2>/dev/null | head -2000');
+    var ltext = '';
+    try { ltext = listed.stdout ? listed.stdout.text() : ''; } catch (textErr2) {}
+    if (!listed.ok) return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
+    var cur = null;
+    var llines = String(ltext).split('\n');
+    for (var j = 0; j < llines.length; j++) {
+      var lline = llines[j].replace(/\r$/, '');
+      if (!lline || lline.indexOf('total ') === 0) continue;
+      if (lline.charAt(lline.length - 1) === ':' && lline.indexOf(WORKSPACE) === 0) {
+        var h = lline.slice(0, -1);
+        cur = h === WORKSPACE ? '' : (h.indexOf(WORKSPACE + '/') === 0 ? h.slice(WORKSPACE.length + 1) : null);
+        continue;
+      }
+      if (cur === null) continue;
+      if (lline.charAt(lline.length - 1) === '/') continue; // dir; contents have their own header
+      out.push(cur ? cur + '/' + lline : lline);
     }
     return { paths: out, listError: null };
+  } catch (lsErr) {
+    return { paths: [], listError: 'could not list sandbox files: ' + fsMsg };
   }
 }
 
@@ -451,7 +478,7 @@ async function pickFolder() {
   agent.shadow = {};
   var keys = Object.keys(files);
   for (var i = 0; i < keys.length; i++) agent.shadow[keys[i]] = files[keys[i]];
-  try { console.log('[favs-agent] sandbox ready, shell resolved, ' + stats.files + ' files'); } catch (logErr) {}
+  try { console.log('[favs-agent] v' + AGENT_VERSION + ' sandbox ready, shell resolved, ' + stats.files + ' files'); } catch (logErr) {}
   setStatus('ready', 'Agent ready — "' + agent.folderName + '" (' + stats.files + ' files)' + note + '.' + skipped + ' Ask me to explore or edit the code.');
 }
 
@@ -486,14 +513,22 @@ function getState() {
     status: agent.status,
     message: agent.message,
     folderName: agent.folderName,
-    fileCount: agent.fileCount
+    fileCount: agent.fileCount,
+    version: AGENT_VERSION
   };
+}
+
+function getVersion() {
+  return AGENT_VERSION;
 }
 
 window.favsAgent = {
   getState: getState,
+  getVersion: getVersion,
   isReady: isReady,
   pickFolder: pickFolder,
   closeFolder: closeFolder,
   runBash: runBash
 };
+
+try { console.log('[favs-agent] loaded v' + AGENT_VERSION); } catch (loadErr) {}

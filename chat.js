@@ -814,6 +814,14 @@
   // Proves Wasmer is really running, independent of the model: runs a real
   // shell command the moment the sandbox becomes ready.
   var selfTestDone = false;
+  function agentVersionTag() {
+    try {
+      var v = window.favsAgent && window.favsAgent.getState ? window.favsAgent.getState().version : null;
+      return v ? ' · agent v' + v : '';
+    } catch (e) {
+      return '';
+    }
+  }
   async function agentSelfTest() {
     if (!window.favsAgent || !window.favsAgent.isReady()) return;
     var result;
@@ -822,7 +830,7 @@
     } catch (e) {
       result = { exitCode: 1, ok: false, stdout: '', stderr: e && e.message ? e.message : String(e), written: [], syncErrors: 0, syncNotes: [] };
     }
-    termLog('echo sandbox-ok && pwd && ls /workspace | head -20', result, 'self-test — real WASIX shell, no model involved');
+    termLog('echo sandbox-ok && pwd && ls /workspace | head -20', result, 'self-test — real WASIX shell, no model involved' + agentVersionTag());
   }
 
   function init() {
