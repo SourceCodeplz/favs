@@ -469,9 +469,8 @@
       // Keep the Safari fallback local too (default points at a CDN).
       wllama.setCompat({ worker: WLLAMA_COMPAT_JS, wasm: WLLAMA_COMPAT_WASM });
 
-      await wllama.loadModelFromHF(
-        { repo: model.repo, file: model.file },
-        {
+      var loadParams = function (extra) {
+        var params = {
           n_ctx: s.nCtx,
           progressCallback: function (p) {
             var loaded = p && p.loaded;
@@ -484,31 +483,65 @@
               setProgress(loaded, total);
             }
           }
+        };
+        if (extra) {
+          for (var k in extra) {
+            if (Object.prototype.hasOwnProperty.call(extra, k)) params[k] = extra[k];
+          }
         }
+        return params;
+      };
+
+      var onLoaded = function () {
+        loadedModelId = model.id;
+        loadedNCtx = s.nCtx;
+        state = 'ready';
+        setDot('ready');
+        setProgress(null);
+        setLoadUI();
+        setLabel();
+        var input = $('composerInput');
+        setStatus(readyMessage(), 'ok');
+        if (pendingPrompt) {
+          var p = pendingPrompt;
+          pendingPrompt = null;
+          sendMessage(p);
+        } else if (input) {
+          input.focus();
+        }
+      };
+
+      await wllama.loadModelFromHF(
+        { repo: model.repo, file: model.file },
+        loadParams()
       );
 
-      loadedModelId = model.id;
-      loadedNCtx = s.nCtx;
-      state = 'ready';
-      setDot('ready');
-      setProgress(null);
-      setLoadUI();
-      setLabel();
-      var input = $('composerInput');
-      setStatus(readyMessage(), 'ok');
-      if (pendingPrompt) {
-        var p = pendingPrompt;
-        pendingPrompt = null;
-        sendMessage(p);
-      } else if (input) {
-        input.focus();
-      }
+      onLoaded();
     } catch (err) {
+      var detail = err && err.message ? err.message : String(err);
+      // Interrupted multi-shard downloads (e.g. navigating away mid-download)
+      // leave only some shards in the wllama cache. Its cache index then
+      // throws "Model file not found: ...-0000X-of-..." instead of resuming.
+      // Retry once bypassing the index so missing shards re-download
+      // (completed shards are kept — CacheManager skips byte-identical files).
+      if (/Model file not found/.test(detail)) {
+        try {
+          setStatus('Interrupted download found — resuming ' + model.name + '…');
+          await wllama.loadModelFromHF(
+            { repo: model.repo, file: model.file },
+            loadParams({ useCache: false })
+          );
+          onLoaded();
+          return;
+        } catch (retryErr) {
+          err = retryErr;
+          detail = retryErr && retryErr.message ? retryErr.message : String(retryErr);
+        }
+      }
       state = 'idle';
       setDot('idle');
       setProgress(null);
       setLoadUI();
-      var detail = err && err.message ? err.message : String(err);
       setStatus('Could not start ' + model.name + ': ' + detail, 'err');
     }
   }
