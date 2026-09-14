@@ -40,6 +40,14 @@
       desc: 'Google edge model. Good for short rewrites.'
     },
     {
+      id: 'minicpm5-2b',
+      name: 'MiniCPM5 2B',
+      repo: 'gooseyai/MiniCPM5-2B-GGUF',
+      file: 'minicpm_Q4_K_M.gguf',
+      size: '~1.8 GB',
+      desc: 'MiniCPM 2B. Strong mid-size, bigger download.'
+    },
+    {
       id: 'gemma4-e2b',
       name: 'Gemma 4 E2B IT',
       repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu',

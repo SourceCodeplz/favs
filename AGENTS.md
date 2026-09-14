@@ -18,7 +18,7 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=9`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=4`, `vault.js?v=1`, `agent.js?v=6`, `chat.js?v=9`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=9`, `settings.css?v=4`, `vault.css?v=1`, `app.js?v=5`, `settings.js?v=5`, `vault.js?v=1`, `agent.js?v=6`, `chat.js?v=10`).
 
 ## Vendoring (no CDN libraries)
 
@@ -40,6 +40,7 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 - Catalog `MODELS` must stay in sync between `chat.js` and `settings.js`:
   - `lfm25-350m` (default, ~200MB) — `LiquidAI/LFM2.5-350M-GGUF / LFM2.5-350M-Q4_K_M.gguf`
   - `gemma3-270m` (~250MB) — `unsloth/gemma-3-270m-it-GGUF / gemma-3-270m-it-Q4_K_M.gguf`
+  - `minicpm5-2b` (~1.8GB) — `gooseyai/MiniCPM5-2B-GGUF / minicpm_Q4_K_M.gguf`
   - `gemma4-e2b` (~3.3GB split, experimental) — official Google QAT weights via `ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu / gemma-4-E2B_q4_0-it-00001-of-00005.gguf` (wllama auto-discovers the other shards; keep every shard <2GB)
 - Context sizes offered: 2048 / 4096 / 8192 / 16384 / 32768. Changing model or ctx unloads the model; it reloads on next Send/Download.
 

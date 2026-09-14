@@ -12,6 +12,7 @@
   var MODELS = [
     { id: 'lfm25-350m', name: 'LFM2.5 350M', repo: 'LiquidAI/LFM2.5-350M-GGUF', file: 'LFM2.5-350M-Q4_K_M.gguf', size: '~200 MB', desc: 'Default. Tiny, fast, tiny download.' },
     { id: 'gemma3-270m', name: 'Gemma 3 270M IT', repo: 'unsloth/gemma-3-270m-it-GGUF', file: 'gemma-3-270m-it-Q4_K_M.gguf', size: '~250 MB', desc: 'Google edge model. Good for short rewrites.' },
+    { id: 'minicpm5-2b', name: 'MiniCPM5 2B', repo: 'gooseyai/MiniCPM5-2B-GGUF', file: 'minicpm_Q4_K_M.gguf', size: '~1.8 GB', desc: 'MiniCPM 2B. Strong mid-size, bigger download.' },
     { id: 'gemma4-e2b', name: 'Gemma 4 E2B IT', repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu', file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf', size: '~3.3 GB', desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.' }
   ];
 
