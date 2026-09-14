@@ -10,13 +10,19 @@
   var STORAGE_KEY = 'favs.settings.v1';
 
   var MODELS = [
-    { id: 'lfm25-350m', name: 'LFM2.5 350M', repo: 'LiquidAI/LFM2.5-350M-GGUF', file: 'LFM2.5-350M-Q4_K_M.gguf', size: '~200 MB', desc: 'Default. Tiny, fast, tiny download.' },
-    { id: 'gemma3-270m', name: 'Gemma 3 270M IT', repo: 'unsloth/gemma-3-270m-it-GGUF', file: 'gemma-3-270m-it-Q4_K_M.gguf', size: '~250 MB', desc: 'Google edge model. Good for short rewrites.' },
-    { id: 'minicpm5-2b', name: 'MiniCPM5 2B', repo: 'gooseyai/MiniCPM5-2B-GGUF', file: 'minicpm_Q4_K_M.gguf', size: '~1.8 GB', desc: 'MiniCPM 2B. Strong mid-size, bigger download.' },
-    { id: 'gemma4-e2b', name: 'Gemma 4 E2B IT', repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu', file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf', size: '~3.3 GB', desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.' }
+    { id: 'lfm25-350m', name: 'LFM2.5 350M', repo: 'LiquidAI/LFM2.5-350M-GGUF', file: 'LFM2.5-350M-Q4_K_M.gguf', size: '~200 MB', desc: 'Default. Tiny, fast, tiny download.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } },
+    { id: 'gemma3-270m', name: 'Gemma 3 270M IT', repo: 'unsloth/gemma-3-270m-it-GGUF', file: 'gemma-3-270m-it-Q4_K_M.gguf', size: '~250 MB', desc: 'Google edge model. Good for short rewrites.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } },
+    { id: 'minicpm5-2b', name: 'MiniCPM5 2B', repo: 'gooseyai/MiniCPM5-2B-GGUF', file: 'minicpm_Q4_K_M.gguf', size: '~1.8 GB', desc: 'MiniCPM 2B. Strong mid-size, bigger download. Needs repeat-penalty 1.15 or it loops.', defaults: { temperature: 1.0, topP: 0.95, repeatPenalty: 1.15 } },
+    { id: 'gemma4-e2b', name: 'Gemma 4 E2B IT', repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu', file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf', size: '~3.3 GB', desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } }
   ];
 
   var CTX_OPTIONS = [2048, 4096, 8192, 16384, 32768];
+
+  function modelDefaults(id) {
+    var m = modelById(id);
+    if (m && m.defaults) return m.defaults;
+    return { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 };
+  }
 
   function defaultSettings() {
     return {
@@ -25,7 +31,9 @@
       modelId: 'lfm25-350m',
       nCtx: 4096,
       maxTokens: 512,
-      temperature: 0.7
+      temperature: 0.7,
+      topP: 0.9,
+      repeatPenalty: 1.0
     };
   }
 
@@ -55,6 +63,7 @@
       if (!modelById(modelId)) modelId = base.modelId;
       var nCtx = Number(parsed.nCtx);
       if (CTX_OPTIONS.indexOf(nCtx) === -1) nCtx = base.nCtx;
+      var fallback = modelDefaults(modelId);
       return {
         siteName: typeof parsed.siteName === 'string' && parsed.siteName.trim() ? parsed.siteName : base.siteName,
         theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
@@ -63,10 +72,24 @@
         maxTokens: clampNumber(parsed.maxTokens, 64, 4096, base.maxTokens),
         temperature: (function () {
           var t = Number(parsed.temperature);
-          if (!isFinite(t)) return base.temperature;
+          if (!isFinite(t)) return fallback.temperature;
           if (t < 0) return 0;
           if (t > 2) return 2;
           return Math.round(t * 10) / 10;
+        })(),
+        topP: (function () {
+          var t = Number(parsed.topP);
+          if (!isFinite(t)) return fallback.topP;
+          if (t < 0.05) return 0.05;
+          if (t > 1) return 1;
+          return Math.round(t * 100) / 100;
+        })(),
+        repeatPenalty: (function () {
+          var t = Number(parsed.repeatPenalty);
+          if (!isFinite(t)) return fallback.repeatPenalty;
+          if (t < 1) return 1;
+          if (t > 2) return 2;
+          return Math.round(t * 100) / 100;
         })(),
         // Preserve unknown/legacy keys (engines, bookmarks, ...) untouched.
         _extra: parsed && typeof parsed === 'object' ? parsed : {}
@@ -92,6 +115,8 @@
     out.nCtx = s.nCtx;
     out.maxTokens = s.maxTokens;
     out.temperature = s.temperature;
+    out.topP = s.topP;
+    out.repeatPenalty = s.repeatPenalty;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
     s._extra = out;
     applyTheme(s.theme);
@@ -135,8 +160,16 @@
       radio.addEventListener('change', function () {
         if (radio.checked) {
           settings.modelId = m.id;
+          // Switching models applies that model's recommended sampling.
+          // MiniCPM5 ships documented settings (temp 1.0 / top-p 0.95 /
+          // repeat-penalty 1.15) — without the penalty it loops mid-thought.
+          var d = modelDefaults(m.id);
+          settings.temperature = d.temperature;
+          settings.topP = d.topP;
+          settings.repeatPenalty = d.repeatPenalty;
           saveSettings(settings);
           renderModels(settings);
+          renderModelParams(settings);
         }
       });
       var body = document.createElement('span');
@@ -156,6 +189,10 @@
     var maxTokensVal = document.getElementById('maxTokensVal');
     var temperature = document.getElementById('temperature');
     var temperatureVal = document.getElementById('temperatureVal');
+    var topP = document.getElementById('topP');
+    var topPVal = document.getElementById('topPVal');
+    var repeatPenalty = document.getElementById('repeatPenalty');
+    var repeatPenaltyVal = document.getElementById('repeatPenaltyVal');
     if (nCtx) nCtx.value = String(settings.nCtx);
     if (maxTokens) {
       maxTokens.value = settings.maxTokens;
@@ -164,6 +201,14 @@
     if (temperature) {
       temperature.value = settings.temperature;
       if (temperatureVal) temperatureVal.textContent = settings.temperature;
+    }
+    if (topP) {
+      topP.value = settings.topP;
+      if (topPVal) topPVal.textContent = settings.topP;
+    }
+    if (repeatPenalty) {
+      repeatPenalty.value = settings.repeatPenalty;
+      if (repeatPenaltyVal) repeatPenaltyVal.textContent = settings.repeatPenalty;
     }
   }
 
@@ -460,6 +505,43 @@
         saveSettings(settings);
       });
     }
+    var topP = document.getElementById('topP');
+    if (topP) {
+      topP.addEventListener('input', function () {
+        var t = Number(topP.value);
+        if (!isFinite(t)) return;
+        if (t < 0.05) t = 0.05;
+        if (t > 1) t = 1;
+        settings.topP = Math.round(t * 100) / 100;
+        var v = document.getElementById('topPVal');
+        if (v) v.textContent = settings.topP;
+        saveSettings(settings);
+      });
+    }
+    var repeatPenalty = document.getElementById('repeatPenalty');
+    if (repeatPenalty) {
+      repeatPenalty.addEventListener('input', function () {
+        var t = Number(repeatPenalty.value);
+        if (!isFinite(t)) return;
+        if (t < 1) t = 1;
+        if (t > 2) t = 2;
+        settings.repeatPenalty = Math.round(t * 100) / 100;
+        var v = document.getElementById('repeatPenaltyVal');
+        if (v) v.textContent = settings.repeatPenalty;
+        saveSettings(settings);
+      });
+    }
+    var samplingDefaults = document.getElementById('samplingDefaults');
+    if (samplingDefaults) {
+      samplingDefaults.addEventListener('click', function () {
+        var d = modelDefaults(settings.modelId);
+        settings.temperature = d.temperature;
+        settings.topP = d.topP;
+        settings.repeatPenalty = d.repeatPenalty;
+        saveSettings(settings);
+        renderModelParams(settings);
+      });
+    }
 
     // Danger zone: reset
     var resetBtn = document.getElementById('resetAll');
@@ -473,6 +555,8 @@
         settings.nCtx = fresh.nCtx;
         settings.maxTokens = fresh.maxTokens;
         settings.temperature = fresh.temperature;
+        settings.topP = fresh.topP;
+        settings.repeatPenalty = fresh.repeatPenalty;
         saveSettings(settings);
         if (nameInput) nameInput.value = settings.siteName;
         document.querySelectorAll('input[name="theme"]').forEach(function (r) { r.checked = r.value === settings.theme; });

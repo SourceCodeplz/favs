@@ -89,6 +89,22 @@
             <label class="label" for="temperature">Creativity (<span id="temperatureVal">0.7</span>)</label>
             <input type="range" id="temperature" min="0" max="2" step="0.1">
           </div>
+          <div class="field">
+            <label class="label" for="topP">Top-p (<span id="topPVal">0.9</span>)</label>
+            <input type="range" id="topP" min="0.05" max="1" step="0.05">
+            <p class="desc" style="margin:0.5rem 0 0">Nucleus sampling: only the smallest set of tokens covering this much probability is considered. Lower is more focused. MiniCPM5 wants 0.95.</p>
+          </div>
+          <div class="field">
+            <label class="label" for="repeatPenalty">Repeat penalty (<span id="repeatPenaltyVal">1.0</span>)</label>
+            <input type="range" id="repeatPenalty" min="1" max="2" step="0.05">
+            <p class="desc" style="margin:0.5rem 0 0">Values above 1 discourage repeating tokens. MiniCPM5 loops without it — its documented optimum is 1.15.</p>
+          </div>
+          <div class="field">
+            <div class="btn-row">
+              <button class="btn secondary" id="samplingDefaults" type="button">Use model defaults</button>
+            </div>
+            <p class="desc" style="margin:0.5rem 0 0">Switching models applies that model's recommended sampling automatically. Tweak freely afterwards — this button restores the recommendation.</p>
+          </div>
         </div>
         <div class="card">
           <div class="field">
@@ -105,6 +121,6 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="settings.js?v=6"></script>
+  <script src="settings.js?v=7"></script>
 </body>
 </html>

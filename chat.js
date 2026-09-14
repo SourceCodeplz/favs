@@ -9,8 +9,11 @@
  * e.g. -00001-of-00005); wllama discovers the remaining shards from the
  * first filename automatically. Keep every single shard under ~2GB
  * (browser/WASM per-file limit).
- * Model behaviour (modelId, nCtx, maxTokens, temperature) lives in
- * localStorage "favs.settings.v1" and is edited on settings.html#model.
+ * Model behaviour (modelId, nCtx, maxTokens, temperature, topP,
+ * repeatPenalty) lives in localStorage "favs.settings.v1" and is edited on
+ * settings.html#model. Each catalog entry carries recommended `defaults`
+ * applied when that model is picked (MiniCPM5: temp 1.0 / top-p 0.95 /
+ * repeat-penalty 1.15 — without it the model loops).
  */
 (function () {
   'use strict';
@@ -29,7 +32,8 @@
       repo: 'LiquidAI/LFM2.5-350M-GGUF',
       file: 'LFM2.5-350M-Q4_K_M.gguf',
       size: '~200 MB',
-      desc: 'Default. Tiny, fast, tiny download.'
+      desc: 'Default. Tiny, fast, tiny download.',
+      defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 }
     },
     {
       id: 'gemma3-270m',
@@ -37,7 +41,8 @@
       repo: 'unsloth/gemma-3-270m-it-GGUF',
       file: 'gemma-3-270m-it-Q4_K_M.gguf',
       size: '~250 MB',
-      desc: 'Google edge model. Good for short rewrites.'
+      desc: 'Google edge model. Good for short rewrites.',
+      defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 }
     },
     {
       id: 'minicpm5-2b',
@@ -45,7 +50,8 @@
       repo: 'gooseyai/MiniCPM5-2B-GGUF',
       file: 'minicpm_Q4_K_M.gguf',
       size: '~1.8 GB',
-      desc: 'MiniCPM 2B. Strong mid-size, bigger download.'
+      desc: 'MiniCPM 2B. Strong mid-size, bigger download. Needs repeat-penalty 1.15 or it loops.',
+      defaults: { temperature: 1.0, topP: 0.95, repeatPenalty: 1.15 }
     },
     {
       id: 'gemma4-e2b',
@@ -53,7 +59,8 @@
       repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu',
       file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf',
       size: '~3.3 GB',
-      desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.'
+      desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.',
+      defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 }
     }
   ];
 
@@ -91,8 +98,14 @@
 
   function $(id) { return document.getElementById(id); }
 
+  function modelDefaults(id) {
+    var m = modelById(id);
+    if (m && m.defaults) return m.defaults;
+    return { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 };
+  }
+
   function defaultSettings() {
-    return { modelId: 'lfm25-350m', nCtx: 4096, maxTokens: 512, temperature: 0.7 };
+    return { modelId: 'lfm25-350m', nCtx: 4096, maxTokens: 512, temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 };
   }
 
   function clampNumber(v, min, max, fallback) {
@@ -112,14 +125,29 @@
       if (!modelById(modelId)) modelId = base.modelId;
       var nCtx = Number(parsed.nCtx);
       if (CTX_OPTIONS.indexOf(nCtx) === -1) nCtx = base.nCtx;
+      var fallback = modelDefaults(modelId);
       return {
         modelId: modelId,
         nCtx: nCtx,
         maxTokens: clampNumber(parsed.maxTokens, 64, 4096, base.maxTokens),
         temperature: (function () {
           var t = Number(parsed.temperature);
-          if (!isFinite(t)) return base.temperature;
+          if (!isFinite(t)) return fallback.temperature;
           if (t < 0) return 0;
+          if (t > 2) return 2;
+          return t;
+        })(),
+        topP: (function () {
+          var t = Number(parsed.topP);
+          if (!isFinite(t)) return fallback.topP;
+          if (t < 0.05) return 0.05;
+          if (t > 1) return 1;
+          return t;
+        })(),
+        repeatPenalty: (function () {
+          var t = Number(parsed.repeatPenalty);
+          if (!isFinite(t)) return fallback.repeatPenalty;
+          if (t < 1) return 1;
           if (t > 2) return 2;
           return t;
         })()
@@ -134,6 +162,20 @@
       if (MODELS[i].id === id) return MODELS[i];
     }
     return null;
+  }
+
+  // Sampling sent to wllama on every request. Both the OAI top-level
+  // `temperature` and the SamplingParams `temp` alias carry the same value
+  // (wllama honours either); `top_p` is nucleus sampling and
+  // `penalty_repeat` is llama.cpp's --repeat-penalty. MiniCPM5 loops
+  // without penalty_repeat 1.15, so it must never silently fall back to 1.0.
+  function samplingParams(s) {
+    return {
+      temperature: s.temperature,
+      temp: s.temperature,
+      top_p: s.topP,
+      penalty_repeat: s.repeatPenalty
+    };
   }
 
   function fmtMB(bytes) {
@@ -348,12 +390,16 @@
           break;
         }
         setStatus('Agent thinking… (step ' + (steps + 1) + '/' + MAX_AGENT_ITERS + ', local)');
+        var sampling = samplingParams(s);
         var resp = await wllama.createChatCompletion({
           messages: agentMessages(),
           tools: [EXECUTE_BASH_TOOL],
           tool_choice: 'auto',
           max_tokens: s.maxTokens,
-          temperature: s.temperature,
+          temperature: sampling.temperature,
+          temp: sampling.temp,
+          top_p: sampling.top_p,
+          penalty_repeat: sampling.penalty_repeat,
           abortSignal: aborter ? aborter.signal : undefined
         });
         var msg = resp && resp.choices && resp.choices[0] && resp.choices[0].message
@@ -709,11 +755,14 @@
     var started = performance.now();
     var out = '';
     try {
+      var sampling = samplingParams(s);
       var stream = await wllama.createChatCompletion({
         messages: modelMessages(),
         max_tokens: s.maxTokens,
-        temperature: s.temperature,
-        top_p: 0.9,
+        temperature: sampling.temperature,
+        temp: sampling.temp,
+        top_p: sampling.top_p,
+        penalty_repeat: sampling.penalty_repeat,
         stream: true,
         abortSignal: aborter ? aborter.signal : undefined
       });
