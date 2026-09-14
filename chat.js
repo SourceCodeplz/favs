@@ -841,6 +841,20 @@
     termLog('echo sandbox-ok && pwd && ls /workspace | head -20', result, 'self-test — real WASIX shell, no model involved' + agentVersionTag());
   }
 
+  // Model weights live in OPFS (Origin Private File System, "cache" dir —
+  // see vendor/wllama), NOT localStorage (which caps at ~5MB while models
+  // are 200MB–3.3GB). OPFS persists across restarts, but Chrome treats it
+  // as best-effort storage and may wipe it under disk pressure or when
+  // "delete site data on close" is enabled. Requesting persistence opts
+  // out of automatic eviction so a downloaded model stays cached.
+  function ensurePersistentStorage() {
+    try {
+      if (navigator.storage && typeof navigator.storage.persist === 'function') {
+        navigator.storage.persist().catch(function () {});
+      }
+    } catch (e) {}
+  }
+
   function init() {
     var loadBtn = $('chatLoad');
     var clearBtn = $('chatClear');
@@ -850,6 +864,7 @@
     setLabel();
     setLoadUI();
     setFolderUI(null);
+    ensurePersistentStorage();
 
     loadBtn.addEventListener('click', loadModel);
     if (clearBtn) clearBtn.addEventListener('click', clearChat);
