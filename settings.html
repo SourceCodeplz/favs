@@ -17,7 +17,7 @@
   } catch (e) {}
 </script>
 <link rel="stylesheet" href="styles.css?v=7">
-<link rel="stylesheet" href="settings.css?v=4">
+<link rel="stylesheet" href="settings.css?v=5">
 </head>
 <body class="settings-body">
   <header class="settings-topbar">
@@ -90,10 +90,21 @@
             <input type="range" id="temperature" min="0" max="2" step="0.1">
           </div>
         </div>
+        <div class="card">
+          <div class="field">
+            <label class="label">Downloaded models</label>
+            <p class="desc" style="margin:0 0 0.75rem" id="cacheSummary">Checking downloaded files…</p>
+            <div class="model-list" id="cacheList"></div>
+            <div class="btn-row">
+              <button class="btn secondary" id="cacheRefresh" type="button">Refresh</button>
+              <button class="btn danger" id="cacheClear" type="button">Delete all</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="settings.js?v=5"></script>
+  <script src="settings.js?v=6"></script>
 </body>
 </html>

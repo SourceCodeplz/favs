@@ -83,6 +83,8 @@
   var wllama = null;
   var loadedModelId = null;
   var loadedNCtx = 0;
+  var customFiles = null; // picked local .gguf File objects (session only, never cached)
+  var customName = '';
   var history = []; // {role, content} excluding system prompt
   var aborter = null;
   var pendingPrompt = null;
@@ -153,6 +155,12 @@
   function setLabel() {
     var el = $('chatModelLabel');
     if (!el) return;
+    if (loadedModelId === ':local') {
+      var ctx = loadedNCtx || getSettings().nCtx;
+      el.textContent = 'Local file · ' + customName + ' · ctx ' + ctx;
+      el.title = customName + ' (picked from your computer, session only)';
+      return;
+    }
     var s = getSettings();
     var m = modelById(s.modelId) || MODELS[0];
     el.textContent = m.name + ' · ' + m.size + ' · ctx ' + s.nCtx;
@@ -208,7 +216,17 @@
     var loadBtn = $('chatLoad');
     var clearBtn = $('chatClear');
     if (state === 'ready') {
-      if (loadBtn) loadBtn.setAttribute('hidden', '');
+      if (loadedModelId === ':local') {
+        // A local file is running — offer the way back to a catalog model.
+        if (loadBtn) {
+          loadBtn.removeAttribute('hidden');
+          loadBtn.disabled = false;
+          loadBtn.textContent = 'Catalog model';
+          loadBtn.title = 'Unload the local file and load the catalog model from settings';
+        }
+      } else if (loadBtn) {
+        loadBtn.setAttribute('hidden', '');
+      }
       if (clearBtn) clearBtn.removeAttribute('hidden');
     } else if (state === 'loading' || state === 'generating') {
       if (loadBtn) {
@@ -482,22 +500,48 @@
     loadedNCtx = 0;
   }
 
+  async function createEngine() {
+    var mod = await import('./' + WLLAMA_LIB);
+    await unloadModel();
+    wllama = new mod.Wllama({ default: WLLAMA_WASM }, { suppressNativeLog: true });
+    // Keep the Safari fallback local too (default points at a CDN).
+    wllama.setCompat({ worker: WLLAMA_COMPAT_JS, wasm: WLLAMA_COMPAT_WASM });
+  }
+
+  function flushPendingPrompt() {
+    var input = $('composerInput');
+    if (pendingPrompt) {
+      var p = pendingPrompt;
+      pendingPrompt = null;
+      sendMessage(p);
+    } else if (input) {
+      input.focus();
+    }
+  }
+
   async function loadModel() {
     if (state === 'loading' || state === 'generating') return;
-    if (state === 'ready') return;
+    // Pressing the button while a local file runs is the explicit way back
+    // to the catalog model (see setLoadUI "Catalog model").
+    if (state === 'ready' && loadedModelId !== ':local') return;
     var s = getSettings();
     var model = modelById(s.modelId) || MODELS[0];
+    if (loadedModelId === ':local') {
+      // Leaving local-file mode for the catalog model — start fresh, the
+      // previous engine's context does not carry over.
+      history = [];
+      var box = $('chatMessages');
+      if (box) box.innerHTML = '';
+    }
+    customFiles = null;
+    customName = '';
     state = 'loading';
     setDot('loading');
     setLoadUI();
     setStatus('Loading engine…');
 
     try {
-      var mod = await import('./' + WLLAMA_LIB);
-      await unloadModel();
-      wllama = new mod.Wllama({ default: WLLAMA_WASM }, { suppressNativeLog: true });
-      // Keep the Safari fallback local too (default points at a CDN).
-      wllama.setCompat({ worker: WLLAMA_COMPAT_JS, wasm: WLLAMA_COMPAT_WASM });
+      await createEngine();
 
       var loadParams = function (extra) {
         var params = {
@@ -530,15 +574,8 @@
         setProgress(null);
         setLoadUI();
         setLabel();
-        var input = $('composerInput');
         setStatus(readyMessage(), 'ok');
-        if (pendingPrompt) {
-          var p = pendingPrompt;
-          pendingPrompt = null;
-          sendMessage(p);
-        } else if (input) {
-          input.focus();
-        }
+        flushPendingPrompt();
       };
 
       await wllama.loadModelFromHF(
@@ -573,6 +610,60 @@
       setProgress(null);
       setLoadUI();
       setStatus('Could not start ' + model.name + ': ' + detail, 'err');
+    }
+  }
+
+  // Load .gguf File objects picked from the user's computer (via the
+  // "Local file" button). Session only: files live in memory and are never
+  // written to the OPFS download cache. For split models, pick ALL shards
+  // at once — they are sorted by name and loaded together.
+  async function loadLocalModel(files) {
+    if (state === 'loading' || state === 'generating') return;
+    var list = [];
+    for (var i = 0; i < (files ? files.length : 0); i++) {
+      if (files[i] && files[i].size > 0) list.push(files[i]);
+    }
+    if (!list.length) {
+      setStatus('Pick at least one .gguf file.', 'err');
+      return;
+    }
+    list.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+    var s = getSettings();
+    var label = list.length === 1 ? list[0].name : list[0].name + ' (+' + (list.length - 1) + ' shards)';
+    if (state === 'ready') {
+      // Replacing a loaded engine — start fresh.
+      history = [];
+      var box = $('chatMessages');
+      if (box) box.innerHTML = '';
+    }
+    state = 'loading';
+    setDot('loading');
+    setLoadUI();
+    setStatus('Loading engine…');
+    try {
+      await createEngine();
+      setStatus('Loading local file… ' + label + ' (' + fmtMB(list.reduce(function (a, f) { return a + f.size; }, 0)) + ')');
+      setProgress(1, 0); // indeterminate — blob loads report no byte progress
+      await wllama.loadModel(list, { n_ctx: s.nCtx });
+      customFiles = list;
+      customName = label;
+      loadedModelId = ':local';
+      loadedNCtx = s.nCtx;
+      state = 'ready';
+      setDot('ready');
+      setProgress(null);
+      setLoadUI();
+      setLabel();
+      var info = backendInfo();
+      setStatus('Ready — ' + label + ' from your computer (' + info.label + ', ctx ' + s.nCtx + '). Session only: pick the file again after a restart.', 'ok');
+      flushPendingPrompt();
+    } catch (err) {
+      var detail = err && err.message ? err.message : String(err);
+      state = 'idle';
+      setDot('idle');
+      setProgress(null);
+      setLoadUI();
+      setStatus('Could not load local file: ' + detail, 'err');
     }
   }
 
@@ -697,7 +788,19 @@
   function onSettingsChanged() {
     var s = getSettings();
     setLabel();
-    if (state === 'ready' && (s.modelId !== loadedModelId || s.nCtx !== loadedNCtx)) {
+    if (loadedModelId === ':local') {
+      // A picked file has no catalog entry — the catalog model choice does
+      // not apply to it. Only a context-size change needs a reload, and the
+      // File objects are still in memory so it can happen automatically.
+      if (state === 'ready' && s.nCtx !== loadedNCtx && customFiles) {
+        var files = customFiles;
+        state = 'idle';
+        setDot('idle');
+        setLoadUI();
+        loadLocalModel(files);
+      }
+      return;
+    }    if (state === 'ready' && (s.modelId !== loadedModelId || s.nCtx !== loadedNCtx)) {
       // Model or context changed in settings — drop the loaded model so the
       // next Send / Download loads the new configuration fresh.
       unloadModel().catch(function () {});
@@ -868,6 +971,19 @@
 
     loadBtn.addEventListener('click', loadModel);
     if (clearBtn) clearBtn.addEventListener('click', clearChat);
+    var localBtn = $('chatLocal');
+    var localInput = $('chatLocalFile');
+    if (localBtn && localInput) {
+      localBtn.addEventListener('click', function () {
+        if (state === 'loading' || state === 'generating') return;
+        try { localInput.click(); } catch (e) {}
+      });
+      localInput.addEventListener('change', function () {
+        var files = localInput.files;
+        localInput.value = '';
+        if (files && files.length) loadLocalModel(files);
+      });
+    }
     if (folderBtn) {
       folderBtn.addEventListener('click', function () {
         try {

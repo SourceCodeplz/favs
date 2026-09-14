@@ -47,10 +47,12 @@
         <a class="chat-model-link" href="settings.html#model">Change</a>
         <button type="button" class="chat-clear-btn" id="chatFolder" title="Attach a folder for the coding agent (runs bash locally in a sandbox)">Folder</button>
         <button type="button" class="chat-clear-btn" id="chatClear" hidden>Clear</button>
+        <button type="button" class="chat-clear-btn" id="chatLocal" title="Load a .gguf file already on your computer (session only — pick all shards for split models)">Local file</button>
         <button type="button" class="chat-load-btn" id="chatLoad">Download &amp; start</button>
+        <input type="file" id="chatLocalFile" accept=".gguf" multiple hidden>
       </div>
     </div>
-    <p class="chat-sub" id="chatStatus" role="status" aria-live="polite">Runs 100% on your device. The model downloads once, then stays cached.</p>
+    <p class="chat-sub" id="chatStatus" role="status" aria-live="polite">Runs 100% on your device. The model downloads once, then stays cached (manage it in Settings → Model).</p>
     <p class="agent-status" id="agentStatus" role="status" aria-live="polite">Sandbox: off — press Folder to attach a directory.</p>
     <div class="agent-term" id="agentTerm" hidden>
       <div class="agent-term-log" id="agentTermLog" aria-live="polite"></div>
@@ -65,6 +67,6 @@
   </section>
   <script src="app.js?v=5"></script>
   <script type="module" src="agent.js?v=6"></script>
-  <script type="module" src="chat.js?v=11"></script>
+  <script type="module" src="chat.js?v=12"></script>
 </body>
 </html>

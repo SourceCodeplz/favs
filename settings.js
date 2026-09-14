@@ -177,6 +177,217 @@
     try { window.location.hash = name; } catch (e) {}
   }
 
+  // Downloaded-models manager: the wllama weight cache lives in OPFS
+  // (navigator.storage "cache" dir, NOT localStorage). Read it directly so
+  // this page stays light — no need to boot the WASM engine just to list
+  // or delete files. Each weight file has a "__metadata__" sidecar with
+  // its original URL; both are removed on delete.
+  var CACHE_DIR = 'cache';
+  var META_PREFIX = '__metadata__';
+
+  function fmtMB(bytes) {
+    return (Number(bytes) / 1048576).toFixed(1) + ' MB';
+  }
+
+  function cacheEls() {
+    return {
+      list: document.getElementById('cacheList'),
+      summary: document.getElementById('cacheSummary'),
+      refresh: document.getElementById('cacheRefresh'),
+      clear: document.getElementById('cacheClear')
+    };
+  }
+
+  function getCacheDir(create) {
+    return navigator.storage.getDirectory().then(function (root) {
+      return root.getDirectoryHandle(CACHE_DIR, { create: !!create });
+    });
+  }
+
+  function readCacheMeta(dir, name) {
+    return dir.getFileHandle(META_PREFIX + name).then(function (h) {
+      return h.getFile();
+    }).then(function (file) {
+      return file.text();
+    }).then(function (text) {
+      try { return JSON.parse(text); } catch (e) { return null; }
+    }).catch(function () { return null; });
+  }
+
+  // True for wllama model files: metadata sidecars, weight files that have
+  // a sidecar, or hash-prefixed keys (older cache entries without sidecar).
+  function isModelFile(dir, name) {
+    if (name.indexOf(META_PREFIX) === 0) return Promise.resolve(true);
+    if (/^[0-9a-f]{40}_/i.test(name)) return Promise.resolve(true);
+    return readCacheMeta(dir, name).then(function (meta) { return !!meta; });
+  }
+
+  function refreshCacheList() {
+    var els = cacheEls();
+    if (!els.list || !els.summary) return Promise.resolve();
+    if (!navigator.storage || !navigator.storage.getDirectory) {
+      els.summary.textContent = 'File cache is not supported in this browser.';
+      els.list.innerHTML = '';
+      return Promise.resolve();
+    }
+    els.summary.textContent = 'Checking downloaded files…';
+    var usageLine = '';
+    var persistedLine = '';
+    var estimateP = Promise.resolve(null);
+    try {
+      estimateP = navigator.storage.estimate ? navigator.storage.estimate() : Promise.resolve(null);
+    } catch (e) { estimateP = Promise.resolve(null); }
+    var persistedP = Promise.resolve(null);
+    try {
+      persistedP = (navigator.storage.persisted) ? navigator.storage.persisted() : Promise.resolve(null);
+    } catch (e) { persistedP = Promise.resolve(null); }
+    return Promise.all([estimateP, persistedP]).then(function (res) {
+      var est = res[0];
+      var persisted = res[1];
+      if (est && typeof est.usage === 'number') {
+        usageLine = 'Using ' + fmtMB(est.usage);
+        if (typeof est.quota === 'number' && est.quota > 0) usageLine += ' of ~' + fmtMB(est.quota);
+        usageLine += '. ';
+      }
+      if (persisted === true) persistedLine = 'Kept on this device. ';
+      else if (persisted === false) persistedLine = 'Not marked persistent — the browser may clear it under disk pressure. Open the start page once to request persistence. ';
+      return getCacheDir(false).then(function (dir) {
+        var files = [];
+        var iter = dir.entries();
+        function next() {
+          return iter.next().then(function (r) {
+            if (r.done) return files;
+            var name = r.value[0];
+            var handle = r.value[1];
+            if (handle && handle.kind === 'file' && name.indexOf(META_PREFIX) !== 0) {
+              return handle.getFile().then(function (f) {
+                files.push({ name: name, size: f.size });
+              }).catch(function () {}).then(next);
+            }
+            return next();
+          });
+        }
+        return next().then(function () { return { dir: dir, files: files }; });
+      }).catch(function () { return { dir: null, files: [] }; });
+    }).then(function (out) {
+      var dir = out.dir;
+      var files = out.files;
+      if (!dir) {
+        els.summary.textContent = usageLine + persistedLine + 'No downloaded models yet.';
+        els.list.innerHTML = '';
+        return;
+      }
+      // Attach original URLs from metadata sidecars for readable names.
+      var withMeta = files.map(function (f) {
+        return readCacheMeta(dir, f.name).then(function (meta) {
+          f.meta = meta;
+          return f;
+        });
+      });
+      return Promise.all(withMeta).then(function (all) {
+        all.sort(function (a, b) { return b.size - a.size; });
+        var total = all.reduce(function (acc, f) { return acc + f.size; }, 0);
+        if (!all.length) {
+          els.summary.textContent = usageLine + persistedLine + 'No downloaded models yet.';
+          els.list.innerHTML = '';
+          return;
+        }
+        els.summary.textContent = usageLine + persistedLine + all.length + ' file' + (all.length === 1 ? '' : 's') + ' · ' + fmtMB(total) + ' total. Deleting frees the space immediately.';
+        els.list.innerHTML = '';
+        all.forEach(function (f) {
+          var url = f.meta && f.meta.originalURL ? String(f.meta.originalURL) : '';
+          var base = url ? url.split('/').pop() : f.name;
+          var row = document.createElement('div');
+          row.className = 'cache-item';
+          var body = document.createElement('div');
+          body.className = 'cache-body';
+          var name = document.createElement('strong');
+          name.textContent = base;
+          var size = document.createElement('span');
+          size.className = 'cache-size';
+          size.textContent = fmtMB(f.size);
+          var sub = document.createElement('small');
+          sub.textContent = url || f.name;
+          body.appendChild(name);
+          body.appendChild(size);
+          body.appendChild(sub);
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'cache-del';
+          del.textContent = 'Delete';
+          del.addEventListener('click', function () {
+            del.disabled = true;
+            del.textContent = 'Deleting…';
+            dir.removeEntry(f.name).catch(function () {}).then(function () {
+              return dir.removeEntry(META_PREFIX + f.name).catch(function () {});
+            }).then(function () {
+              toast('Deleted ' + base);
+              refreshCacheList();
+            }).catch(function () {
+              toast('Could not delete ' + base);
+              refreshCacheList();
+            });
+          });
+          row.appendChild(body);
+          row.appendChild(del);
+          els.list.appendChild(row);
+        });
+      });
+    }).catch(function () {
+      els.summary.textContent = 'Could not read the download cache.';
+    });
+  }
+
+  function initCacheManager() {
+    var els = cacheEls();
+    if (!els.list) return;
+    if (els.refresh) els.refresh.addEventListener('click', function () { refreshCacheList(); });
+    if (els.clear) els.clear.addEventListener('click', function () {
+      if (!window.confirm('Delete all downloaded models? They will download again on next use.')) return;
+      if (!navigator.storage || !navigator.storage.getDirectory) return;
+      // Scope deletion to wllama model files (hash-prefixed weight files
+      // and their metadata sidecars) — never touch anything else in storage.
+      getCacheDir(false).then(function (dir) {
+        var names = [];
+        var iter = dir.entries();
+        function next() {
+          return iter.next().then(function (r) {
+            if (r.done) return names;
+            if (r.value[1] && r.value[1].kind === 'file') names.push(r.value[0]);
+            return next();
+          });
+        }
+        return next().then(function () { return { dir: dir, names: names }; });
+      }).then(function (out) {
+        var checks = out.names.map(function (n) {
+          return isModelFile(out.dir, n).then(function (yes) {
+            return { name: n, keep: !yes };
+          });
+        });
+        return Promise.all(checks).then(function (flags) { return { dir: out.dir, flags: flags }; });
+      }).then(function (out) {
+        var chain = Promise.resolve();
+        out.flags.forEach(function (f) {
+          if (f.keep) return;
+          chain = chain.then(function () { return out.dir.removeEntry(f.name).catch(function () {}); });
+        });
+        return chain;
+      }).then(function () {
+        toast('Download cache cleared');
+        refreshCacheList();
+      }).catch(function () {
+        toast('Could not clear the cache');
+      });
+    });
+    // Refresh whenever the Model section is opened.
+    document.querySelectorAll('.settings-nav button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.getAttribute('data-section') === 'model') refreshCacheList();
+      });
+    });
+    refreshCacheList();
+  }
+
   function init() {
     var settings = loadSettings();
     applyTheme(settings.theme);
@@ -215,6 +426,7 @@
     // Model: switcher + params
     renderModels(settings);
     renderModelParams(settings);
+    initCacheManager();
 
     var nCtx = document.getElementById('nCtx');
     if (nCtx) {

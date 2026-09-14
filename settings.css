@@ -266,6 +266,38 @@
 .bookmark-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bookmark-row .grow small { display: block; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
 
+/* Downloaded-models cache manager (Model section). */
+.cache-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: var(--bg);
+}
+
+.cache-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.cache-body strong { font-size: 0.9rem; overflow-wrap: break-word; }
+.cache-body small { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; overflow-wrap: break-word; }
+.cache-size { font-size: 0.78rem; font-weight: 700; color: var(--accent); }
+
+.cache-del {
+  flex: none;
+  border: 1px solid rgba(217, 48, 37, 0.5);
+  background: transparent;
+  color: #d93025;
+  border-radius: 10px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cache-del:hover { background: rgba(217, 48, 37, 0.1); border-color: #d93025; }
+.cache-del:disabled { opacity: 0.5; cursor: default; }
+
+.cache-empty { font-size: 0.88rem; color: var(--text-muted); padding: 0.25rem; }
+
 .toast {
   position: fixed;
   bottom: 1.25rem;
