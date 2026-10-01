@@ -1,8 +1,12 @@
-/* FAVS vault page — private clips in localStorage key "favs.clips.v1". */
+/* FAVS vault page — private clips in localStorage key "favs.clips.v1".
+ * Search is keyword-based until the Semantic button loads EmbeddingGemma
+ * (embed.js, 100% local); then clips are ranked by meaning (cosine).
+ */
 (function () {
   'use strict';
 
   var CLIPS_KEY = 'favs.clips.v1';
+  var SEARCH_DEBOUNCE_MS = 250;
 
   function loadClips() {
     try {
@@ -93,19 +97,166 @@
     }
   }
 
-  function render(filter) {
+  // ---- Semantic search state (embed.js) ----
+
+  var semanticOn = false; // user pressed Semantic and the model is ready
+  var semanticBusy = false;
+  var searchSeq = 0;
+
+  function embed() {
+    return (window.favsEmbed && typeof window.favsEmbed.ensureLoaded === 'function') ? window.favsEmbed : null;
+  }
+
+  function setEmbedStatus(msg, kind) {
+    var el = document.getElementById('embedStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'embed-status' + (kind ? ' ' + kind : '');
+  }
+
+  function setEmbedProgress(done, total) {
+    var wrap = document.getElementById('embedProgress');
+    var bar = document.getElementById('embedProgressBar');
+    if (!wrap || !bar) return;
+    if (done == null || total == null) {
+      wrap.setAttribute('hidden', '');
+      return;
+    }
+    wrap.removeAttribute('hidden');
+    bar.style.width = total ? Math.min(100, Math.round((done / total) * 100)) + '%' : '100%';
+    if (done >= total) {
+      setTimeout(function () { wrap.setAttribute('hidden', ''); }, 600);
+    }
+  }
+
+  function setEmbedBtn() {
+    var btn = document.getElementById('embedBtn');
+    if (!btn) return;
+    var st = embed() ? embed().getState() : { status: 'idle' };
+    if (semanticOn && st.status === 'ready') {
+      btn.textContent = 'Semantic on';
+      btn.disabled = false;
+      btn.title = 'Meaning search is active — press to turn it off';
+    } else if (st.status === 'loading') {
+      btn.textContent = 'Loading…';
+      btn.disabled = true;
+      btn.title = 'Downloading the embedding model';
+    } else {
+      btn.textContent = 'Semantic';
+      btn.disabled = semanticBusy;
+      btn.title = 'Enable meaning search (downloads ~320 MB once, then stays offline)';
+    }
+  }
+
+  function onEmbedEvent(ev) {
+    var d = (ev && ev.detail) || {};
+    if (d.status === 'loading') {
+      if (typeof d.loaded === 'number') setEmbedProgress(d.loaded, d.total || 0);
+      setEmbedStatus(d.message || 'Loading…');
+    } else if (d.status === 'ready') {
+      setEmbedProgress(null);
+      semanticOn = true;
+      semanticBusy = false;
+      setEmbedBtn();
+      setEmbedStatus(d.message || 'Semantic search is on — type to search by meaning.');
+      runSearch(); // re-rank the current query, if any
+    } else if (d.status === 'error') {
+      setEmbedProgress(null);
+      semanticBusy = false;
+      setEmbedBtn();
+      setEmbedStatus(d.message || 'Semantic search failed.', 'err');
+    }
+  }
+
+  function enableSemantic() {
+    var api = embed();
+    if (!api) {
+      setEmbedStatus('Embedding runtime failed to load (embed.js missing?).', 'err');
+      return;
+    }
+    if (semanticOn && api.isReady()) {
+      // Toggle off — back to keyword search.
+      semanticOn = false;
+      setEmbedBtn();
+      setEmbedStatus('Keyword search. Press Semantic for meaning search.');
+      runSearch();
+      return;
+    }
+    semanticBusy = true;
+    setEmbedBtn();
+    setEmbedStatus('Starting semantic search…');
+    api.ensureLoaded().catch(function () {
+      // Status already reported via favs:embed.
+    }).then(function () {
+      semanticBusy = false;
+      setEmbedBtn();
+    });
+  }
+
+  function keywordFilter(clips, q) {
+    var query = (q || '').trim().toLowerCase();
+    if (!query) return clips.slice();
+    return clips.filter(function (c) {
+      var hay = (((c && c.text) || '') + '\n' + ((c && c.name) || '')).toLowerCase();
+      return hay.indexOf(query) !== -1;
+    });
+  }
+
+  function runSearch() {
+    var seq = ++searchSeq;
+    var q = searchInput ? searchInput.value : '';
+    var api = embed();
+    if (semanticOn && api && api.isReady() && q.trim().length >= 2) {
+      semanticSearch(seq, q.trim());
+    } else {
+      render(keywordFilter(loadClips(), q), null);
+      if (!semanticOn && q.trim()) {
+        setEmbedStatus('Keyword search. Press Semantic for meaning search (downloads ~320 MB once, then stays offline).');
+      } else if (!q.trim() && !semanticOn) {
+        setEmbedStatus('Keyword search. Press Semantic for meaning search (downloads ~320 MB once, then stays offline).');
+      }
+    }
+  }
+
+  function semanticSearch(seq, query) {
+    var api = embed();
+    var clips = loadClips();
+    setEmbedStatus('Searching by meaning…');
+    api.ensureIndexed(clips, function (done, total) {
+      if (seq !== searchSeq) return;
+      setEmbedStatus('Indexing clips… ' + done + ' / ' + total);
+      setEmbedProgress(done, total);
+    }).then(function (out) {
+      if (seq !== searchSeq) return;
+      return api.embedRaw(query).then(function (qvec) {
+        if (seq !== searchSeq) return;
+        var ranked = api.rankClips(qvec, clips, out.vectors);
+        var scores = {};
+        ranked.forEach(function (r) { scores[r.clip.id] = r.score; });
+        setEmbedProgress(null);
+        if (!ranked.length) {
+          setEmbedStatus('Indexed ' + out.total + ' clips — nothing with text to rank.', 'err');
+          render([], null);
+          return;
+        }
+        setEmbedStatus(ranked.length + ' clips ranked by meaning' + (out.indexed ? ' (' + out.indexed + ' newly indexed).' : '.'));
+        render(ranked.map(function (r) { return r.clip; }), scores);
+      });
+    }).catch(function (err) {
+      if (seq !== searchSeq) return;
+      setEmbedProgress(null);
+      var msg = err && err.message ? err.message : String(err);
+      setEmbedStatus('Semantic search failed: ' + msg + ' — showing keyword results.', 'err');
+      render(keywordFilter(loadClips(), searchInput ? searchInput.value : ''), null);
+    });
+  }
+
+  function render(shown, scores) {
     var clips = loadClips();
     var list = document.getElementById('clipList');
     var empty = document.getElementById('clipEmpty');
     var count = document.getElementById('clipCount');
     if (!list) return;
-
-    var q = (filter || '').trim().toLowerCase();
-    var shown = clips.filter(function (c) {
-      if (!q) return true;
-      var hay = ((c.text || '') + '\n' + (c.name || '')).toLowerCase();
-      return hay.indexOf(q) !== -1;
-    });
 
     if (count) count.textContent = clips.length ? clips.length + (clips.length === 1 ? ' clip' : ' clips') : '';
     list.innerHTML = '';
@@ -121,6 +272,15 @@
       date.className = 'clip-date';
       date.textContent = clip.createdAt ? formatDate(clip.createdAt) : '';
       head.appendChild(date);
+
+      if (scores && scores[clip.id] != null) {
+        var badge = document.createElement('span');
+        badge.className = 'sem-score';
+        var pct = Math.max(0, Math.min(100, Math.round(scores[clip.id] * 100)));
+        badge.textContent = pct + '% match';
+        badge.title = 'Semantic similarity (cosine)';
+        head.appendChild(badge);
+      }
 
       var actions = document.createElement('div');
       actions.className = 'clip-actions';
@@ -183,8 +343,11 @@
       addBtn('Delete', function () {
         if (!window.confirm('Delete this clip?')) return;
         storeClips(loadClips().filter(function (c) { return !c || c.id !== clip.id; }));
+        try {
+          if (embed()) embed().prune([clip.id]);
+        } catch (e) {}
         toast('Deleted');
-        render(searchInput ? searchInput.value : '');
+        runSearch();
       });
 
       head.appendChild(actions);
@@ -195,6 +358,7 @@
   }
 
   var searchInput = null;
+  var searchTimer = null;
 
   function exportClips() {
     var clips = loadClips();
@@ -218,8 +382,15 @@
   function init() {
     searchInput = document.getElementById('clipSearch');
     if (searchInput) {
-      searchInput.addEventListener('input', function () { render(searchInput.value); });
+      searchInput.addEventListener('input', function () {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
+      });
     }
+    var semBtn = document.getElementById('embedBtn');
+    if (semBtn) semBtn.addEventListener('click', enableSemantic);
+    window.addEventListener('favs:embed', onEmbedEvent);
+    setEmbedBtn();
     var exp = document.getElementById('clipExport');
     if (exp) exp.addEventListener('click', exportClips);
     var clear = document.getElementById('clipClear');
@@ -228,12 +399,16 @@
         var clips = loadClips();
         if (!clips.length) { toast('Vault is already empty'); return; }
         if (!window.confirm('Delete all ' + clips.length + ' clips? This cannot be undone.')) return;
+        var ids = clips.map(function (c) { return c && c.id; }).filter(Boolean);
         storeClips([]);
+        try {
+          if (embed()) embed().prune(ids);
+        } catch (e) {}
         toast('Vault cleared');
-        render(searchInput ? searchInput.value : '');
+        runSearch();
       });
     }
-    render('');
+    runSearch();
     try {
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {

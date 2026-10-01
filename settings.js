@@ -1,55 +1,20 @@
-/* FAVS settings page. Sections: general / appearance / model.
+/* FAVS settings page. Sections: general / appearance / search.
  *
- * MODELS below must stay in sync with chat.js (same id/repo/file).
- * Old keys (engines, defaultEngine, bookmarks, ...) are ignored on load
- * but preserved in storage so nothing is lost by upgrading.
+ * The only model is the EmbeddingGemma embedding (see embed.js) — there is
+ * no model picker or sampling config anymore. Old keys (modelId, nCtx,
+ * maxTokens, temperature, ...) are ignored on load but preserved in storage
+ * so nothing is lost by upgrading.
  */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'favs.settings.v1';
 
-  var MODELS = [
-    { id: 'lfm25-350m', name: 'LFM2.5 350M', repo: 'LiquidAI/LFM2.5-350M-GGUF', file: 'LFM2.5-350M-Q4_K_M.gguf', size: '~200 MB', desc: 'Default. Tiny, fast, tiny download.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } },
-    { id: 'gemma3-270m', name: 'Gemma 3 270M IT', repo: 'unsloth/gemma-3-270m-it-GGUF', file: 'gemma-3-270m-it-Q4_K_M.gguf', size: '~250 MB', desc: 'Google edge model. Good for short rewrites.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } },
-    { id: 'minicpm5-2b', name: 'MiniCPM5 2B', repo: 'gooseyai/MiniCPM5-2B-GGUF', file: 'minicpm_Q4_K_M.gguf', size: '~1.8 GB', desc: 'MiniCPM 2B. Strong mid-size, bigger download. Needs repeat-penalty 1.15 or it loops.', defaults: { temperature: 1.0, topP: 0.95, repeatPenalty: 1.15 } },
-    { id: 'gemma4-e2b', name: 'Gemma 4 E2B IT', repo: 'ryanhlewis/gemma-4-E2B-it-qat-q4_0-gguf-webgpu', file: 'gemma-4-E2B_q4_0-it-00001-of-00005.gguf', size: '~3.3 GB', desc: 'Official Google QAT weights, split for browser. Smartest, huge download, experimental.', defaults: { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 } }
-  ];
-
-  var CTX_OPTIONS = [2048, 4096, 8192, 16384, 32768];
-
-  function modelDefaults(id) {
-    var m = modelById(id);
-    if (m && m.defaults) return m.defaults;
-    return { temperature: 0.7, topP: 0.9, repeatPenalty: 1.0 };
-  }
-
   function defaultSettings() {
     return {
       siteName: 'favs.eu.org',
-      theme: 'system',
-      modelId: 'lfm25-350m',
-      nCtx: 4096,
-      maxTokens: 512,
-      temperature: 0.7,
-      topP: 0.9,
-      repeatPenalty: 1.0
+      theme: 'system'
     };
-  }
-
-  function clampNumber(v, min, max, fallback) {
-    var n = Number(v);
-    if (!isFinite(n)) return fallback;
-    if (n < min) return min;
-    if (n > max) return max;
-    return Math.round(n);
-  }
-
-  function modelById(id) {
-    for (var i = 0; i < MODELS.length; i++) {
-      if (MODELS[i].id === id) return MODELS[i];
-    }
-    return null;
   }
 
   function loadSettings() {
@@ -59,39 +24,10 @@
     if (!raw) return base;
     try {
       var parsed = JSON.parse(raw);
-      var modelId = typeof parsed.modelId === 'string' ? parsed.modelId : base.modelId;
-      if (!modelById(modelId)) modelId = base.modelId;
-      var nCtx = Number(parsed.nCtx);
-      if (CTX_OPTIONS.indexOf(nCtx) === -1) nCtx = base.nCtx;
-      var fallback = modelDefaults(modelId);
       return {
         siteName: typeof parsed.siteName === 'string' && parsed.siteName.trim() ? parsed.siteName : base.siteName,
         theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
-        modelId: modelId,
-        nCtx: nCtx,
-        maxTokens: clampNumber(parsed.maxTokens, 64, 4096, base.maxTokens),
-        temperature: (function () {
-          var t = Number(parsed.temperature);
-          if (!isFinite(t)) return fallback.temperature;
-          if (t < 0) return 0;
-          if (t > 2) return 2;
-          return Math.round(t * 10) / 10;
-        })(),
-        topP: (function () {
-          var t = Number(parsed.topP);
-          if (!isFinite(t)) return fallback.topP;
-          if (t < 0.05) return 0.05;
-          if (t > 1) return 1;
-          return Math.round(t * 100) / 100;
-        })(),
-        repeatPenalty: (function () {
-          var t = Number(parsed.repeatPenalty);
-          if (!isFinite(t)) return fallback.repeatPenalty;
-          if (t < 1) return 1;
-          if (t > 2) return 2;
-          return Math.round(t * 100) / 100;
-        })(),
-        // Preserve unknown/legacy keys (engines, bookmarks, ...) untouched.
+        // Preserve unknown/legacy keys (modelId, engines, bookmarks, ...) untouched.
         _extra: parsed && typeof parsed === 'object' ? parsed : {}
       };
     } catch (e) {
@@ -111,13 +47,9 @@
     }
     out.siteName = s.siteName;
     out.theme = s.theme;
-    out.modelId = s.modelId;
-    out.nCtx = s.nCtx;
-    out.maxTokens = s.maxTokens;
-    out.temperature = s.temperature;
-    out.topP = s.topP;
-    out.repeatPenalty = s.repeatPenalty;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    } catch (e) {}
     s._extra = out;
     applyTheme(s.theme);
     toast('Saved');
@@ -139,79 +71,6 @@
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1500);
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function renderModels(settings) {
-    var list = document.getElementById('modelList');
-    if (!list) return;
-    list.innerHTML = '';
-    MODELS.forEach(function (m) {
-      var row = document.createElement('label');
-      row.className = 'model-item' + (settings.modelId === m.id ? ' selected' : '');
-      var radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'model';
-      radio.value = m.id;
-      radio.checked = settings.modelId === m.id;
-      radio.addEventListener('change', function () {
-        if (radio.checked) {
-          settings.modelId = m.id;
-          // Switching models applies that model's recommended sampling.
-          // MiniCPM5 ships documented settings (temp 1.0 / top-p 0.95 /
-          // repeat-penalty 1.15) — without the penalty it loops mid-thought.
-          var d = modelDefaults(m.id);
-          settings.temperature = d.temperature;
-          settings.topP = d.topP;
-          settings.repeatPenalty = d.repeatPenalty;
-          saveSettings(settings);
-          renderModels(settings);
-          renderModelParams(settings);
-        }
-      });
-      var body = document.createElement('span');
-      body.className = 'model-body';
-      body.innerHTML = '<strong>' + escapeHtml(m.name) + '</strong>' +
-        '<span class="model-size">' + escapeHtml(m.size) + '</span>' +
-        '<small>' + escapeHtml(m.desc) + '<br>' + escapeHtml(m.repo + ' / ' + m.file) + '</small>';
-      row.appendChild(radio);
-      row.appendChild(body);
-      list.appendChild(row);
-    });
-  }
-
-  function renderModelParams(settings) {
-    var nCtx = document.getElementById('nCtx');
-    var maxTokens = document.getElementById('maxTokens');
-    var maxTokensVal = document.getElementById('maxTokensVal');
-    var temperature = document.getElementById('temperature');
-    var temperatureVal = document.getElementById('temperatureVal');
-    var topP = document.getElementById('topP');
-    var topPVal = document.getElementById('topPVal');
-    var repeatPenalty = document.getElementById('repeatPenalty');
-    var repeatPenaltyVal = document.getElementById('repeatPenaltyVal');
-    if (nCtx) nCtx.value = String(settings.nCtx);
-    if (maxTokens) {
-      maxTokens.value = settings.maxTokens;
-      if (maxTokensVal) maxTokensVal.textContent = settings.maxTokens;
-    }
-    if (temperature) {
-      temperature.value = settings.temperature;
-      if (temperatureVal) temperatureVal.textContent = settings.temperature;
-    }
-    if (topP) {
-      topP.value = settings.topP;
-      if (topPVal) topPVal.textContent = settings.topP;
-    }
-    if (repeatPenalty) {
-      repeatPenalty.value = settings.repeatPenalty;
-      if (repeatPenaltyVal) repeatPenaltyVal.textContent = settings.repeatPenalty;
-    }
-  }
-
   function switchSection(name) {
     document.querySelectorAll('.settings-nav button').forEach(function (btn) {
       btn.setAttribute('aria-selected', btn.getAttribute('data-section') === name ? 'true' : 'false');
@@ -220,6 +79,66 @@
       sec.hidden = sec.getAttribute('data-section-panel') !== name;
     });
     try { window.location.hash = name; } catch (e) {}
+  }
+
+  // ---- Embedding model download (embed.js) ----
+
+  function embed() {
+    return (window.favsEmbed && typeof window.favsEmbed.ensureLoaded === 'function') ? window.favsEmbed : null;
+  }
+
+  function setEmbedSettingsStatus(msg) {
+    var el = document.getElementById('embedSettingsStatus');
+    if (el) el.textContent = msg;
+  }
+
+  function setDownloadBtn() {
+    var btn = document.getElementById('embedDownload');
+    if (!btn) return;
+    var api = embed();
+    if (api && api.isReady()) {
+      btn.textContent = 'Embedding model ready';
+      btn.disabled = true;
+    } else {
+      btn.textContent = 'Download embedding model';
+      btn.disabled = false;
+    }
+  }
+
+  function initEmbedDownload() {
+    var btn = document.getElementById('embedDownload');
+    if (!btn) return;
+    setDownloadBtn();
+    window.addEventListener('favs:embed', function (ev) {
+      var d = (ev && ev.detail) || {};
+      if (d.status === 'loading') {
+        setEmbedSettingsStatus(d.message || 'Loading…');
+        btn.disabled = true;
+        btn.textContent = 'Downloading…';
+      } else if (d.status === 'ready') {
+        setEmbedSettingsStatus(d.message || 'Ready.');
+        setDownloadBtn();
+        refreshCacheList();
+      } else if (d.status === 'error') {
+        setEmbedSettingsStatus(d.message || 'Download failed.');
+        btn.disabled = false;
+        btn.textContent = 'Retry download';
+      }
+    });
+    btn.addEventListener('click', function () {
+      var api = embed();
+      if (!api) {
+        setEmbedSettingsStatus('Embedding runtime failed to load (embed.js missing?).');
+        return;
+      }
+      if (api.isReady()) return;
+      btn.disabled = true;
+      btn.textContent = 'Downloading…';
+      setEmbedSettingsStatus('Starting download…');
+      api.ensureLoaded().catch(function () {
+        // Status already reported via favs:embed.
+      });
+    });
   }
 
   // Downloaded-models manager: the wllama weight cache lives in OPFS
@@ -424,10 +343,10 @@
         toast('Could not clear the cache');
       });
     });
-    // Refresh whenever the Model section is opened.
+    // Refresh whenever the Semantic search section is opened.
     document.querySelectorAll('.settings-nav button').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        if (btn.getAttribute('data-section') === 'model') refreshCacheList();
+        if (btn.getAttribute('data-section') === 'search') refreshCacheList();
       });
     });
     refreshCacheList();
@@ -442,6 +361,7 @@
       btn.addEventListener('click', function () { switchSection(btn.getAttribute('data-section')); });
     });
     var initial = (window.location.hash || '#general').slice(1);
+    if (initial === 'model') initial = 'search'; // legacy hash from the old Model section
     if (!document.querySelector('[data-section-panel="' + initial + '"]')) initial = 'general';
     switchSection(initial);
 
@@ -468,80 +388,9 @@
       });
     });
 
-    // Model: switcher + params
-    renderModels(settings);
-    renderModelParams(settings);
+    // Semantic search: download + cache manager
+    initEmbedDownload();
     initCacheManager();
-
-    var nCtx = document.getElementById('nCtx');
-    if (nCtx) {
-      nCtx.addEventListener('change', function () {
-        var v = Number(nCtx.value);
-        if (CTX_OPTIONS.indexOf(v) !== -1) {
-          settings.nCtx = v;
-          saveSettings(settings);
-        }
-      });
-    }
-    var maxTokens = document.getElementById('maxTokens');
-    if (maxTokens) {
-      maxTokens.addEventListener('input', function () {
-        settings.maxTokens = clampNumber(maxTokens.value, 64, 4096, defaultSettings().maxTokens);
-        var v = document.getElementById('maxTokensVal');
-        if (v) v.textContent = settings.maxTokens;
-        saveSettings(settings);
-      });
-    }
-    var temperature = document.getElementById('temperature');
-    if (temperature) {
-      temperature.addEventListener('input', function () {
-        var t = Number(temperature.value);
-        if (!isFinite(t)) return;
-        if (t < 0) t = 0;
-        if (t > 2) t = 2;
-        settings.temperature = Math.round(t * 10) / 10;
-        var v = document.getElementById('temperatureVal');
-        if (v) v.textContent = settings.temperature;
-        saveSettings(settings);
-      });
-    }
-    var topP = document.getElementById('topP');
-    if (topP) {
-      topP.addEventListener('input', function () {
-        var t = Number(topP.value);
-        if (!isFinite(t)) return;
-        if (t < 0.05) t = 0.05;
-        if (t > 1) t = 1;
-        settings.topP = Math.round(t * 100) / 100;
-        var v = document.getElementById('topPVal');
-        if (v) v.textContent = settings.topP;
-        saveSettings(settings);
-      });
-    }
-    var repeatPenalty = document.getElementById('repeatPenalty');
-    if (repeatPenalty) {
-      repeatPenalty.addEventListener('input', function () {
-        var t = Number(repeatPenalty.value);
-        if (!isFinite(t)) return;
-        if (t < 1) t = 1;
-        if (t > 2) t = 2;
-        settings.repeatPenalty = Math.round(t * 100) / 100;
-        var v = document.getElementById('repeatPenaltyVal');
-        if (v) v.textContent = settings.repeatPenalty;
-        saveSettings(settings);
-      });
-    }
-    var samplingDefaults = document.getElementById('samplingDefaults');
-    if (samplingDefaults) {
-      samplingDefaults.addEventListener('click', function () {
-        var d = modelDefaults(settings.modelId);
-        settings.temperature = d.temperature;
-        settings.topP = d.topP;
-        settings.repeatPenalty = d.repeatPenalty;
-        saveSettings(settings);
-        renderModelParams(settings);
-      });
-    }
 
     // Danger zone: reset
     var resetBtn = document.getElementById('resetAll');
@@ -551,17 +400,9 @@
         var fresh = defaultSettings();
         settings.siteName = fresh.siteName;
         settings.theme = fresh.theme;
-        settings.modelId = fresh.modelId;
-        settings.nCtx = fresh.nCtx;
-        settings.maxTokens = fresh.maxTokens;
-        settings.temperature = fresh.temperature;
-        settings.topP = fresh.topP;
-        settings.repeatPenalty = fresh.repeatPenalty;
         saveSettings(settings);
         if (nameInput) nameInput.value = settings.siteName;
         document.querySelectorAll('input[name="theme"]').forEach(function (r) { r.checked = r.value === settings.theme; });
-        renderModels(settings);
-        renderModelParams(settings);
       });
     }
 

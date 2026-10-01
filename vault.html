@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vault — FAVS</title>
-<meta name="description" content="FAVS vault — your private saved clips, stored only in this browser.">
+<meta name="description" content="FAVS vault — your private saved clips with local semantic search, stored only in this browser.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#202124">
@@ -18,8 +18,8 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=7">
-<link rel="stylesheet" href="vault.css?v=1">
+<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="vault.css?v=2">
 </head>
 <body class="vault-body">
   <header class="settings-topbar">
@@ -31,13 +31,17 @@
     <p class="desc">Private clips saved from the start page. Stored only in this browser (<code>localStorage</code>) — nothing leaves your device.</p>
     <div class="vault-toolbar">
       <input type="search" id="clipSearch" placeholder="Search clips…" autocomplete="off" aria-label="Search clips">
+      <button type="button" class="btn secondary" id="embedBtn">Semantic</button>
       <button type="button" class="btn secondary" id="clipExport">Export</button>
       <button type="button" class="btn danger" id="clipClear">Delete all</button>
     </div>
+    <p class="embed-status" id="embedStatus" role="status" aria-live="polite">Keyword search. Press Semantic for meaning search (downloads ~320 MB once, then stays offline).</p>
+    <div class="embed-progress" id="embedProgress" hidden><span id="embedProgressBar"></span></div>
     <div id="clipList" class="clip-list"></div>
     <p class="vault-empty" id="clipEmpty" hidden>No clips yet. Write something in the box on the start page and hit Save (<kbd>Ctrl</kbd> + <kbd>S</kbd>).</p>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="vault.js?v=1"></script>
+  <script type="module" src="embed.js?v=1"></script>
+  <script src="vault.js?v=2"></script>
 </body>
 </html>

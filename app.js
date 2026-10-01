@@ -1,6 +1,5 @@
-/* FAVS home page: unified text box (Send to AI / Save to vault).
+/* FAVS home page: text box that saves to the vault.
  * Depends on localStorage keys "favs.settings.v1" and "favs.clips.v1".
- * Send is delegated to chat.js via a "favs:send" CustomEvent on window.
  */
 (function () {
   'use strict';
@@ -12,11 +11,7 @@
   function defaultSettings() {
     return {
       siteName: 'favs.eu.org',
-      theme: 'system',
-      modelId: 'lfm25-350m',
-      nCtx: 4096,
-      maxTokens: 512,
-      temperature: 0.7
+      theme: 'system'
     };
   }
 
@@ -28,31 +23,11 @@
       var base = defaultSettings();
       return {
         siteName: typeof parsed.siteName === 'string' && parsed.siteName.trim() ? parsed.siteName : base.siteName,
-        theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
-        modelId: typeof parsed.modelId === 'string' ? parsed.modelId : base.modelId,
-        nCtx: [2048, 4096, 8192, 16384, 32768].indexOf(Number(parsed.nCtx)) !== -1 ? Number(parsed.nCtx) : base.nCtx,
-        maxTokens: clampNumber(parsed.maxTokens, 64, 4096, base.maxTokens),
-        temperature: clampFloat(parsed.temperature, 0, 2, base.temperature)
+        theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system'
       };
     } catch (e) {
       return defaultSettings();
     }
-  }
-
-  function clampNumber(v, min, max, fallback) {
-    var n = Number(v);
-    if (!isFinite(n)) return fallback;
-    if (n < min) return min;
-    if (n > max) return max;
-    return Math.round(n);
-  }
-
-  function clampFloat(v, min, max, fallback) {
-    var n = Number(v);
-    if (!isFinite(n)) return fallback;
-    if (n < min) return min;
-    if (n > max) return max;
-    return n;
   }
 
   function applyTheme(theme) {
@@ -101,11 +76,10 @@
 
   function initComposer() {
     var input = document.getElementById('composerInput');
-    var sendBtn = document.getElementById('sendBtn');
     var saveBtn = document.getElementById('saveBtn');
     var statusEl = document.getElementById('composerStatus');
     var openLink = document.getElementById('vaultOpen');
-    if (!input || !sendBtn || !saveBtn) return;
+    if (!input || !saveBtn) return;
 
     var statusTimer = null;
     function status(msg, kind) {
@@ -120,16 +94,6 @@
       if (!openLink) return;
       var n = loadClips().length;
       openLink.textContent = n ? 'Vault (' + n + ') \u2192' : 'Vault \u2192';
-    }
-
-    function sendText() {
-      var text = input.value;
-      if (!text || !text.trim()) { status('Write or paste something first.', 'err'); input.focus(); return; }
-      try {
-        window.dispatchEvent(new CustomEvent('favs:send', { detail: { text: text } }));
-      } catch (e) {
-        status('Could not reach the local AI.', 'err');
-      }
     }
 
     function saveText() {
@@ -182,13 +146,9 @@
       });
     }
 
-    sendBtn.addEventListener('click', sendText);
     saveBtn.addEventListener('click', saveText);
     input.addEventListener('keydown', function (ev) {
-      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
-        ev.preventDefault();
-        sendText();
-      } else if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S')) {
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S')) {
         ev.preventDefault();
         saveText();
       }
@@ -199,14 +159,6 @@
         // Let text land in the box too; files are saved as vault attachments.
         saveFiles(dt.files);
       }
-    });
-    // AI replies can be moved back into the box for editing + saving.
-    window.addEventListener('favs:use-text', function (ev) {
-      var t = ev && ev.detail && typeof ev.detail.text === 'string' ? ev.detail.text : '';
-      if (!t) return;
-      input.value = t;
-      input.focus();
-      status('Moved into the text box — edit it or press Save.', 'ok');
     });
     refreshCount();
   }
