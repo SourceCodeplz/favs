@@ -141,6 +141,18 @@
       input.focus();
     }
 
+    function saveFragment(text) {
+      if (!text || !text.trim()) return;
+      try {
+        addClip({ id: makeId('c'), kind: 'text', text: text, createdAt: Date.now() });
+      } catch (e) {
+        status('Vault is full — delete old clips to free space.', 'err');
+        return;
+      }
+      status('Saved to your private vault.', 'ok');
+      refreshCount();
+    }
+
     function saveFiles(files) {
       var list = [];
       for (var i = 0; i < files.length; i++) {
@@ -192,12 +204,21 @@
     });
     input.addEventListener('paste', function (ev) {
       var dt = ev.clipboardData;
+      var pastedText = '';
+      try {
+        if (dt) pastedText = dt.getData('text/plain') || dt.getData('text') || '';
+      } catch (e) { pastedText = ''; }
       if (dt && dt.files && dt.files.length) {
         // Files are saved as vault attachments; pasted text below is auto-saved too.
         saveFiles(dt.files);
       }
-      // Pasting auto-saves: let the pasted text land, then save the whole box.
-      setTimeout(function () { saveText({ silent: true }); }, 0);
+      // Pasting auto-saves only the pasted fragment and keeps the box intact,
+      // so pasting again appends instead of replacing a cleared box.
+      if (pastedText && pastedText.trim()) {
+        saveFragment(pastedText);
+      }
+      // Let the pasted text land, then update button/count state without clearing.
+      setTimeout(refreshComposerState, 0);
     });
     refreshCount();
     refreshComposerState();

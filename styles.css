@@ -406,6 +406,23 @@ html:not([data-theme]) .home::before {
 .composer-clear:hover { background: var(--card-bg); color: var(--text); }
 .composer-clear[hidden] { display: none; }
 
+/* Vault shortcut next to Save — same ghost style as Clear, always visible. */
+.composer-vault {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.composer-vault:hover { background: var(--card-bg); color: var(--text); }
+
 .composer-btn {
   padding: 0.55rem 1.3rem;
   border: 1px solid var(--button-border);

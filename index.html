@@ -18,7 +18,7 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body class="home">
   <div class="topbar">
@@ -32,11 +32,12 @@
       <span class="composer-hint"><kbd>Ctrl</kbd> + <kbd>S</kbd> to save &middot; pasting saves automatically</span>
       <span class="composer-count" id="composerCount" hidden></span>
       <button type="button" class="composer-clear" id="clearBtn" hidden>Clear</button>
+      <a class="composer-vault" href="vault.html">Vault</a>
       <button type="button" class="composer-btn" id="saveBtn">Save</button>
     </div>
   </section>
   <p class="composer-status" id="composerStatus" role="status" aria-live="polite"></p>
   <p class="home-note">Private clipboard — everything stays in this browser.</p>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
