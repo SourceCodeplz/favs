@@ -119,38 +119,90 @@
       }
     }
 
-    function saveText(opts) {
-      var silent = !!(opts && opts.silent);
+    // Notepad sessions: typing/pasting only edits the box. After a pause the
+    // whole box saves as ONE clip (created once, then updated in place while
+    // the session continues). The text stays put — Save finalizes and clears.
+    var AUTOSAVE_DELAY = 3000;
+    var autosaveTimer = null;
+    var sessionClipId = null;
+    var lastSavedText = '';
+
+    function cancelAutosave() {
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+
+    function scheduleAutosave() {
+      cancelAutosave();
+      autosaveTimer = setTimeout(autosave, AUTOSAVE_DELAY);
+    }
+
+    function endSession() {
+      cancelAutosave();
+      sessionClipId = null;
+      lastSavedText = '';
+    }
+
+    // Write the current box to the vault without clearing it. Creates the
+    // session clip on first call, updates it after that. Returns true if saved.
+    function snapshotBox() {
+      var text = input.value;
+      if (!text || !text.trim()) return false;
+      if (text === lastSavedText) return true;
+      try {
+        if (sessionClipId) {
+          var clips = loadClips();
+          var found = false;
+          for (var i = 0; i < clips.length; i++) {
+            if (clips[i] && clips[i].id === sessionClipId) {
+              clips[i].text = text;
+              clips[i].updatedAt = Date.now();
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            clips.unshift({ id: sessionClipId, kind: 'text', text: text, createdAt: Date.now(), updatedAt: Date.now() });
+          }
+          storeClips(clips);
+        } else {
+          sessionClipId = makeId('c');
+          addClip({ id: sessionClipId, kind: 'text', text: text, createdAt: Date.now(), updatedAt: Date.now() });
+        }
+      } catch (e) {
+        status('Vault is full — delete old clips to free space.', 'err');
+        return false;
+      }
+      lastSavedText = text;
+      refreshCount();
+      return true;
+    }
+
+    // Idle autosave: keep writing, one clip per session, box stays intact.
+    function autosave() {
+      autosaveTimer = null;
+      if (snapshotBox()) status('Auto-saved to your private vault.', 'ok');
+    }
+
+    function saveText() {
+      cancelAutosave();
       var text = input.value;
       if (!text || !text.trim()) {
-        if (silent) return;
         status('Write or paste something first.', 'err');
         input.focus();
         return;
       }
-      try {
-        addClip({ id: makeId('c'), kind: 'text', text: text, createdAt: Date.now() });
-      } catch (e) {
-        status('Vault is full — delete old clips to free space.', 'err');
+      if (sessionClipId && text === lastSavedText) {
+        // Already auto-saved — just finalize without duplicating.
+      } else if (!snapshotBox()) {
         return;
       }
       input.value = '';
+      endSession();
       status('Saved to your private vault.', 'ok');
       refreshCount();
       refreshComposerState();
       input.focus();
-    }
-
-    function saveFragment(text) {
-      if (!text || !text.trim()) return;
-      try {
-        addClip({ id: makeId('c'), kind: 'text', text: text, createdAt: Date.now() });
-      } catch (e) {
-        status('Vault is full — delete old clips to free space.', 'err');
-        return;
-      }
-      status('Saved to your private vault.', 'ok');
-      refreshCount();
     }
 
     function saveFiles(files) {
@@ -191,11 +243,20 @@
     saveBtn.addEventListener('click', function () { saveText(); });
     if (clearBtn) clearBtn.addEventListener('click', function () {
       input.value = '';
+      endSession();
       status('', '');
       refreshComposerState();
       input.focus();
     });
-    input.addEventListener('input', refreshComposerState);
+    input.addEventListener('input', function () {
+      refreshComposerState();
+      if (!input.value) {
+        // Emptied by hand — the old session stays in the vault, start fresh.
+        endSession();
+        return;
+      }
+      scheduleAutosave();
+    });
     input.addEventListener('keydown', function (ev) {
       if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S')) {
         ev.preventDefault();
@@ -204,22 +265,19 @@
     });
     input.addEventListener('paste', function (ev) {
       var dt = ev.clipboardData;
-      var pastedText = '';
-      try {
-        if (dt) pastedText = dt.getData('text/plain') || dt.getData('text') || '';
-      } catch (e) { pastedText = ''; }
       if (dt && dt.files && dt.files.length) {
-        // Files are saved as vault attachments; pasted text below is auto-saved too.
+        // Pasted files can't live in the text box — they save as attachments.
         saveFiles(dt.files);
       }
-      // Pasting auto-saves only the pasted fragment and keeps the box intact,
-      // so pasting again appends instead of replacing a cleared box.
-      if (pastedText && pastedText.trim()) {
-        saveFragment(pastedText);
-      }
-      // Let the pasted text land, then update button/count state without clearing.
-      setTimeout(refreshComposerState, 0);
+      // Pasted text just lands in the box and joins the session; the idle
+      // autosave stores the whole box as one clip.
+      setTimeout(function () {
+        refreshComposerState();
+        if (input.value && input.value.trim()) scheduleAutosave();
+      }, 0);
     });
+    // Leaving with unsent text: flush the session so nothing is lost.
+    window.addEventListener('pagehide', function () { snapshotBox(); });
     refreshCount();
     refreshComposerState();
     input.focus();

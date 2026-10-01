@@ -1,42 +1,30 @@
 # FAVS
 
-Private pastebin + vault at https://favs.eu.org. Static files: `index.html`, `settings.html`, `vault.html`, `styles.css`, `settings.css`, `vault.css`, `app.js`, `settings.js`, `vault.js`, `sw.js`.
-
-Repo: `SourceCodeplz/favs`, branch `main`. Local path: `C:\Users\danie\Documents\favs`.
-Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no build step.
-
-No AI, no third-party libraries, no CDN — vault search is plain keyword matching. Nothing leaves the browser.
+Private notepad + vault at https://favs.eu.org. Static files, no build, no libraries, no CDN — nothing leaves the browser. Push to `main` auto-deploys (Cloudflare Pages).
 
 ## Workflow
 
-- ALWAYS commit and push to `main` by yourself after making changes — do not wait for the user to say "push".
-- Page-to-page links (`index.html` ↔ `settings.html` ↔ `vault.html`) must be plain, with NO `?v=` query. `?v=` is only for CSS/JS asset references.
+- Commit and push to `main` yourself after every change.
+- Page links (`index.html` ↔ `settings.html` ↔ `vault.html`) stay plain. `?v=` only on CSS/JS asset URLs, bumped to the next integer when that asset changes (now: `styles.css?v=12`, `settings.css?v=6`, `vault.css?v=4`, `app.js?v=10`, `settings.js?v=9`, `vault.js?v=4`).
+- Bump `CACHE` in `sw.js` only when the precached shell changes.
 
-## Home page
+## Home (notepad)
 
-- Single text box (`#composerInput`): autofocused on open; **Save** stores to the vault (`localStorage "favs.clips.v1"`). No Send, no chat — `Ctrl+S` = Save, and **pasting auto-saves** (text saves after the paste lands; pasted files save as attachments).
-- `saveText({ silent: true })` is the autosave path — it returns quietly on empty input instead of showing an error.
-- Home chrome: topbar `Vault` pill with live count badge (`#vaultCount`); composer foot has hint + char count (`#composerCount`) + `Clear` (`#clearBtn`, hidden when empty) + Save (disabled when empty).
+One box (`#composerInput`, autofocused). Typing/pasting only edits the box — nothing saves per keystroke or per paste.
+
+- Idle 3s → the whole box saves as **one** clip: created once per session, then updated in place while you keep writing. Text stays in the box.
+- **Save** / `Ctrl+S` finalizes the session and clears the box (no duplicate if already auto-saved). **Clear** empties the box without touching the vault. Leaving the page flushes unsent text.
+- Pasted files save immediately as attachments (they can't live in the text box).
+- Chrome: topbar `Vault` pill with count badge (`#vaultCount`); foot has hint, char count (`#composerCount`), `Clear` (`#clearBtn`, hidden when empty), `Vault` link, Save (disabled when empty).
 
 ## Vault
 
-- Keyword-only text search over clip text + file names; search box is autofocused. Export / Delete all included.
-- Search UX: result counts (`#clipMeta`), separate no-clips vs no-matches states (`#clipEmpty` / `#clipNoResults` + `#clipClearSearch`), `/` focuses search, `Esc` clears it. Long clips (>600 chars) start collapsed with Show more/less.
-- Deleted keys from the removed embedding era (`favs.embeddings.v1`) are cleaned from localStorage on page init.
+Keyword search over clip text + file names. Shows counts, empty vs no-match states, collapses long clips (>600 chars). Export / Delete all included.
 
-## Assets & cache busting
+## Settings (`favs.settings.v1`)
 
-- CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=11`, `settings.css?v=6`, `vault.css?v=4`, `app.js?v=8`, `settings.js?v=9`, `vault.js?v=4`).
-- Bump `CACHE` in `sw.js` when the offline shell changes.
-
-## Settings (localStorage `favs.settings.v1`)
-
-- Sections (left menu in `settings.html`): General (site name), Appearance (system/light/dark).
-- Legacy keys (`modelId`, `nCtx`, `maxTokens`, `temperature`, `topP`, `repeatPenalty`, `engines`, `defaultEngine`, `bookmarks`, ...) are preserved untouched on save but have no UI.
-- Keep the pre-CSS theme snippet in sync between `index.html` and `settings.html` if the storage key changes.
+Sections: General (site name), Appearance (system/light/dark). Preserve unknown keys on save; keep the pre-CSS theme snippet in `index.html`/`settings.html` in sync.
 
 ## Verification
 
-- Do NOT verify visually — the user inspects visually.
-- Only verify JavaScript: `node --check app.js`, `node --check settings.js`, `node --check vault.js`, plus a quick DOM-less smoke test if changed.
+Don't verify visually. Run `node --check` on changed JS plus a quick DOM-less smoke test.
