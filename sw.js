@@ -11,7 +11,7 @@
  */
 'use strict';
 
-var CACHE = 'favs-v2';
+var CACHE = 'favs-v3';
 
 var PRECACHE = [
   './',

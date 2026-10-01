@@ -1,7 +1,0 @@
-# Cross-origin isolation so wllama can use multi-threaded WASM
-# (SharedArrayBuffer) for local embeddings — 2-4x faster where WebGPU is off.
-# `credentialless` (not `require-corp`) keeps cross-origin favicons working.
-# Do not remove: without these, WASM falls back to a single thread.
-/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless

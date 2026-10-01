@@ -184,45 +184,6 @@
   padding: 0.05rem 0.35rem;
 }
 
-.embed-status {
-  margin: -0.5rem 0 1rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-
-.embed-status.err { color: #d93025; }
-
-.embed-progress {
-  height: 4px;
-  margin: -0.5rem 0 1rem;
-  border-radius: 999px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  overflow: hidden;
-}
-
-.embed-progress[hidden] { display: none; }
-
-.embed-progress span {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: inherit;
-  background: var(--accent);
-}
-
-.sem-score {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--field-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 999px;
-  padding: 0.1rem 0.55rem;
-  white-space: nowrap;
-}
-
 .toast {
   position: fixed;
   bottom: 1.25rem;

@@ -28,7 +28,6 @@
     <nav class="settings-nav" aria-label="Settings sections">
       <button type="button" data-section="general" aria-selected="true">General</button>
       <button type="button" data-section="appearance" aria-selected="false">Appearance</button>
-      <button type="button" data-section="search" aria-selected="false">Semantic search</button>
     </nav>
     <main class="settings-content">
       <section class="settings-section" data-section-panel="general">
@@ -60,45 +59,9 @@
         </div>
       </section>
 
-      <section class="settings-section" data-section-panel="search" hidden>
-        <h2>Semantic search</h2>
-        <p class="desc">The vault can search by meaning, not just keywords. One embedding model runs 100% in your browser — it downloads once, then works offline from cache.</p>
-        <div class="card">
-          <div class="field">
-            <label class="label">Embedding model</label>
-            <div class="model-list">
-              <div class="model-item selected">
-                <div class="model-body">
-                  <strong>EmbeddingGemma 300M</strong>
-                  <span class="model-size">~320 MB · Q8</span>
-                  <small>Google embedding model, quantized for the browser.<br>ggml-org/embeddinggemma-300M-GGUF / embeddinggemma-300M-Q8_0.gguf</small>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="field">
-            <p class="desc" style="margin:0" id="embedSettingsStatus">Not downloaded yet. Press Download to fetch it now, or press Semantic in the vault when you need it.</p>
-            <div class="btn-row">
-              <button class="btn secondary" id="embedDownload" type="button">Download embedding model</button>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="field">
-            <label class="label">Downloaded files</label>
-            <p class="desc" style="margin:0 0 0.75rem" id="cacheSummary">Checking downloaded files…</p>
-            <div class="model-list" id="cacheList"></div>
-            <div class="btn-row">
-              <button class="btn secondary" id="cacheRefresh" type="button">Refresh</button>
-              <button class="btn danger" id="cacheClear" type="button">Delete all</button>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="embed.js?v=2"></script>
-  <script src="settings.js?v=8"></script>
+  <script src="settings.js?v=9"></script>
 </body>
 </html>

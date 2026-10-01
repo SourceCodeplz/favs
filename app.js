@@ -96,9 +96,15 @@
       openLink.textContent = n ? 'Vault (' + n + ') \u2192' : 'Vault \u2192';
     }
 
-    function saveText() {
+    function saveText(opts) {
+      var silent = !!(opts && opts.silent);
       var text = input.value;
-      if (!text || !text.trim()) { status('Write or paste something first.', 'err'); input.focus(); return; }
+      if (!text || !text.trim()) {
+        if (silent) return;
+        status('Write or paste something first.', 'err');
+        input.focus();
+        return;
+      }
       try {
         addClip({ id: makeId('c'), kind: 'text', text: text, createdAt: Date.now() });
       } catch (e) {
@@ -146,7 +152,7 @@
       });
     }
 
-    saveBtn.addEventListener('click', saveText);
+    saveBtn.addEventListener('click', function () { saveText(); });
     input.addEventListener('keydown', function (ev) {
       if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S')) {
         ev.preventDefault();
@@ -156,11 +162,14 @@
     input.addEventListener('paste', function (ev) {
       var dt = ev.clipboardData;
       if (dt && dt.files && dt.files.length) {
-        // Let text land in the box too; files are saved as vault attachments.
+        // Files are saved as vault attachments; pasted text below is auto-saved too.
         saveFiles(dt.files);
       }
+      // Pasting auto-saves: let the pasted text land, then save the whole box.
+      setTimeout(function () { saveText({ silent: true }); }, 0);
     });
     refreshCount();
+    input.focus();
   }
 
   function registerServiceWorker() {
@@ -174,6 +183,8 @@
   }
 
   function init() {
+    // One-time cleanup of the removed embedding vector cache.
+    try { localStorage.removeItem('favs.embeddings.v1'); } catch (e) {}
     var settings = loadSettings();
     applyTheme(settings.theme);
 
