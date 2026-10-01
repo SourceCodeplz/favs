@@ -77,8 +77,11 @@
   function initComposer() {
     var input = document.getElementById('composerInput');
     var saveBtn = document.getElementById('saveBtn');
+    var clearBtn = document.getElementById('clearBtn');
+    var countEl = document.getElementById('composerCount');
     var statusEl = document.getElementById('composerStatus');
     var openLink = document.getElementById('vaultOpen');
+    var countBadge = document.getElementById('vaultCount');
     if (!input || !saveBtn) return;
 
     var statusTimer = null;
@@ -91,9 +94,29 @@
     }
 
     function refreshCount() {
-      if (!openLink) return;
       var n = loadClips().length;
-      openLink.textContent = n ? 'Vault (' + n + ') \u2192' : 'Vault \u2192';
+      if (countBadge) {
+        countBadge.hidden = !n;
+        countBadge.textContent = n ? String(n) : '';
+      }
+      if (openLink) openLink.setAttribute('aria-label', n ? 'Vault — ' + n + ' saved clips' : 'Vault — saved clips');
+    }
+
+    function formatCount(n) {
+      if (n < 1000) return n === 1 ? '1 char' : n + ' chars';
+      if (n < 10000) return (Math.round(n / 100) / 10) + 'k chars';
+      return Math.round(n / 1000) + 'k chars';
+    }
+
+    function refreshComposerState() {
+      var hasText = !!(input.value && input.value.trim());
+      saveBtn.disabled = !hasText;
+      if (clearBtn) clearBtn.hidden = !input.value;
+      if (countEl) {
+        var len = (input.value || '').length;
+        countEl.hidden = !len;
+        countEl.textContent = len ? formatCount(len) : '';
+      }
     }
 
     function saveText(opts) {
@@ -114,6 +137,7 @@
       input.value = '';
       status('Saved to your private vault.', 'ok');
       refreshCount();
+      refreshComposerState();
       input.focus();
     }
 
@@ -153,6 +177,13 @@
     }
 
     saveBtn.addEventListener('click', function () { saveText(); });
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+      input.value = '';
+      status('', '');
+      refreshComposerState();
+      input.focus();
+    });
+    input.addEventListener('input', refreshComposerState);
     input.addEventListener('keydown', function (ev) {
       if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S')) {
         ev.preventDefault();
@@ -169,6 +200,7 @@
       setTimeout(function () { saveText({ silent: true }); }, 0);
     });
     refreshCount();
+    refreshComposerState();
     input.focus();
   }
 

@@ -18,26 +18,31 @@
     if (s.theme === 'light' || s.theme === 'dark') document.documentElement.setAttribute('data-theme', s.theme);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="styles.css?v=10">
-<link rel="stylesheet" href="vault.css?v=2">
+<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="vault.css?v=4">
 </head>
 <body class="vault-body">
   <header class="settings-topbar">
-    <a class="back" href="index.html">&larr; Start page</a>
+    <a class="back" href="index.html">&larr; Clipboard</a>
     <h1>Vault</h1>
     <span class="vault-count" id="clipCount"></span>
   </header>
   <main class="vault-main">
-    <p class="desc">Private clips saved from the start page. Stored only in this browser (<code>localStorage</code>) — nothing leaves your device.</p>
+    <p class="desc">Your private clipboard history. Search everything below — stored only in this browser.</p>
     <div class="vault-toolbar">
-      <input type="search" id="clipSearch" placeholder="Search clips…" autocomplete="off" aria-label="Search clips" autofocus>
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" id="clipSearch" placeholder="Search clips…  ( press / )" autocomplete="off" aria-label="Search clips" autofocus>
+      </div>
       <button type="button" class="btn secondary" id="clipExport">Export</button>
       <button type="button" class="btn danger" id="clipClear">Delete all</button>
     </div>
+    <p class="vault-meta" id="clipMeta" hidden></p>
     <div id="clipList" class="clip-list"></div>
     <p class="vault-empty" id="clipEmpty" hidden>No clips yet. Paste anything on the start page — it saves automatically.</p>
+    <p class="vault-empty" id="clipNoResults" hidden>No matches for &ldquo;<span id="clipNoQuery"></span>&rdquo;. <button type="button" class="link-btn" id="clipClearSearch">Clear search</button></p>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="vault.js?v=3"></script>
+  <script src="vault.js?v=4"></script>
 </body>
 </html>

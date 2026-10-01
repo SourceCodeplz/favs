@@ -1,46 +1,10 @@
-/* Settings page layout. Shared variables live in styles.css. */
+/* Settings page layout. Shared variables + topbar live in styles.css. */
 .settings-body {
   display: block;
   min-height: 100vh;
 }
 
-.settings-topbar {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid var(--card-border);
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  z-index: 10;
-}
-
-.settings-topbar a.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--accent);
-  text-decoration: none;
-  font-size: 0.92rem;
-  font-weight: 600;
-  padding: 0.35rem 0.7rem 0.35rem 0.5rem;
-  margin-left: -0.5rem;
-  border-radius: 999px;
-  transition: background 0.15s;
-}
-
-.settings-topbar a.back:hover { background: var(--card-bg); text-decoration: none; }
-
-.settings-topbar h1 {
-  font-size: 1.05rem;
-  margin: 0;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
+/* .settings-topbar is shared in styles.css (vault uses it too). */
 
 .settings-layout {
   display: grid;
