@@ -276,8 +276,13 @@
         if (input.value && input.value.trim()) scheduleAutosave();
       }, 0);
     });
-    // Leaving with unsent text: flush the session so nothing is lost.
-    window.addEventListener('pagehide', function () { snapshotBox(); });
+    // Fast flow: open, paste, close. Flush unsent text when the tab hides
+    // or the page unloads, so a quick paste-and-close still saves.
+    function flushSession() { snapshotBox(); }
+    window.addEventListener('pagehide', flushSession);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flushSession();
+    });
     refreshCount();
     refreshComposerState();
     input.focus();
