@@ -239,7 +239,9 @@
           render([], null);
           return;
         }
-        setEmbedStatus(ranked.length + ' clips ranked by meaning' + (out.indexed ? ' (' + out.indexed + ' newly indexed).' : '.'));
+        setEmbedStatus(ranked.length + ' clips ranked by meaning' +
+          (out.indexed ? ' (' + out.indexed + ' newly indexed)' : '') +
+          (out.failed ? ' (' + out.failed + ' too long, skipped)' : '') + '.');
         render(ranked.map(function (r) { return r.clip; }), scores);
       });
     }).catch(function (err) {

@@ -17,7 +17,7 @@ Deploy: Cloudflare Pages connected to GitHub — push to `main` auto-deploys, no
 ## Assets & cache busting
 
 - CSS/JS are external files, referenced with a version query: `styles.css?v=N`, `settings.css?v=N`, `app.js?v=N`, `settings.js?v=N`.
-- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=10`, `settings.css?v=5`, `vault.css?v=2`, `app.js?v=6`, `settings.js?v=8`, `vault.js?v=2`, `embed.js?v=1`).
+- ALWAYS bump `?v=` to the next integer in the HTML reference of the changed asset (current: `styles.css?v=10`, `settings.css?v=5`, `vault.css?v=2`, `app.js?v=6`, `settings.js?v=8`, `vault.js?v=2`, `embed.js?v=2`).
 
 ## Vendoring (no CDN libraries)
 

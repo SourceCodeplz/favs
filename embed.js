@@ -29,7 +29,13 @@
 
   var CACHE_KEY = 'favs.embeddings.v1';
   var MAX_INDEX_CHARS = 1500; // chars per clip fed to the model (well under its 2048-token window)
+  var CHUNK_CHARS = 1000; // fallback slice size when a text still exceeds the batch
+  var MAX_CHUNKS = 4; // cap on fallback slices per clip (bounds indexing time)
   var STORE_DECIMALS = 4; // rounding keeps the localStorage cache small
+
+  // Batch must cover the whole context window: an input longer than the
+  // batch is rejected ("too large to process"), even when n_ctx allows it.
+  var LOAD_PARAMS = { n_ctx: 2048, n_batch: 2048, n_ubatch: 2048, embeddings: true };
 
   var status = 'idle'; // idle | loading | ready | error
   var message = '';
@@ -167,8 +173,10 @@
       await wllama.loadModelFromHF(
         { repo: MODEL.repo, file: MODEL.file },
         {
-          n_ctx: 2048,
-          embeddings: true,
+          n_ctx: LOAD_PARAMS.n_ctx,
+          n_batch: LOAD_PARAMS.n_batch,
+          n_ubatch: LOAD_PARAMS.n_ubatch,
+          embeddings: LOAD_PARAMS.embeddings,
           progressCallback: function (p) {
             var loaded = p && p.loaded;
             var total = p && p.total;
@@ -192,7 +200,7 @@
           await createEngine();
           await wllama.loadModelFromHF(
             { repo: MODEL.repo, file: MODEL.file },
-            { n_ctx: 2048, embeddings: true, useCache: false }
+            { n_ctx: LOAD_PARAMS.n_ctx, n_batch: LOAD_PARAMS.n_batch, n_ubatch: LOAD_PARAMS.n_ubatch, embeddings: LOAD_PARAMS.embeddings, useCache: false }
           );
           setStatus('ready', 'Ready — ' + MODEL.name + ' locally (' + backendInfo() + ').');
         })().catch(function (retryErr) {
@@ -212,15 +220,71 @@
     return loadPromise;
   }
 
-  async function embedRaw(text) {
-    await ensureLoaded();
-    var input = String(text == null ? '' : text).slice(0, MAX_INDEX_CHARS);
-    var resp = await wllama.createEmbedding({ input: input });
+  async function embedOne(text) {
+    var resp = await wllama.createEmbedding({ input: text });
     var vec = resp && resp.data && resp.data[0] && resp.data[0].embedding
       ? resp.data[0].embedding
       : (resp && resp.embedding ? resp.embedding : null);
     if (!vec || !vec.length) throw new Error('empty embedding — try again');
-    return normalize(vec);
+    return vec;
+  }
+
+  // Split on whitespace so chunks never cut words in half.
+  function splitChunks(text) {
+    var chunks = [];
+    var rest = String(text == null ? '' : text);
+    while (rest.length > CHUNK_CHARS && chunks.length < MAX_CHUNKS) {
+      var cut = rest.lastIndexOf(' ', CHUNK_CHARS);
+      if (cut < CHUNK_CHARS / 2) cut = CHUNK_CHARS; // no spaces nearby — hard cut
+      chunks.push(rest.slice(0, cut));
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) chunks.push(rest.slice(0, CHUNK_CHARS));
+    return chunks;
+  }
+
+  function meanVec(vecs) {
+    var dim = vecs[0].length;
+    var out = new Array(dim);
+    for (var i = 0; i < dim; i++) out[i] = 0;
+    for (var j = 0; j < vecs.length; j++) {
+      var n = Math.min(dim, vecs[j].length);
+      for (var k = 0; k < n; k++) out[k] += vecs[j][k];
+    }
+    for (var m = 0; m < dim; m++) out[m] /= vecs.length;
+    return out;
+  }
+
+  function isBatchError(err) {
+    var msg = err && err.message ? err.message : String(err);
+    return /too large to process|batch size|context|tokens/i.test(msg);
+  }
+
+  async function embedRaw(text) {
+    await ensureLoaded();
+    var input = String(text == null ? '' : text).slice(0, MAX_INDEX_CHARS);
+    try {
+      return normalize(await embedOne(input));
+    } catch (err) {
+      if (!isBatchError(err)) throw err;
+      // Still too long (dense scripts pack many tokens per char):
+      // embed slices and average them. One long clip must never
+      // break the whole search.
+      var chunks = splitChunks(input);
+      var vecs = [];
+      for (var i = 0; i < chunks.length; i++) {
+        try {
+          vecs.push(await embedOne(chunks[i]));
+        } catch (chunkErr) {
+          if (!isBatchError(chunkErr)) throw chunkErr;
+          // Slice it even thinner and try once more.
+          var thin = splitChunks(chunks[i]).slice(0, 1);
+          if (thin.length) vecs.push(await embedOne(thin[0]));
+        }
+      }
+      if (!vecs.length) throw err;
+      return normalize(meanVec(vecs));
+    }
   }
 
   function cachedVector(cache, id, hash) {
@@ -252,6 +316,7 @@
     if (!cache) cache = {};
     var vectors = {};
     var missing = [];
+    var failed = 0;
     for (var i = 0; i < list.length; i++) {
       var clip = list[i];
       if (!clip || !clip.id) continue;
@@ -270,14 +335,21 @@
       if (onProgress) {
         try { onProgress(j, missing.length); } catch (e) {}
       }
-      var vec = await embedRaw(m.text);
-      putVector(storageOk.ok ? cache : null, storageOk, m.clip.id, m.hash, vec);
-      vectors[m.clip.id] = normalize(vec);
+      try {
+        var vec = await embedRaw(m.text);
+        putVector(storageOk.ok ? cache : null, storageOk, m.clip.id, m.hash, vec);
+        vectors[m.clip.id] = normalize(vec);
+      } catch (clipErr) {
+        // One bad clip (too long, odd bytes, …) is skipped — it must
+        // never abort indexing for all the others.
+        failed++;
+        try { console.warn('[favs-embed] skipping clip ' + m.clip.id + ': ' + (clipErr && clipErr.message ? clipErr.message : clipErr)); } catch (warnErr) {}
+      }
     }
     if (onProgress) {
       try { onProgress(missing.length, missing.length); } catch (e) {}
     }
-    return { vectors: vectors, indexed: missing.length, total: list.length };
+    return { vectors: vectors, indexed: missing.length - failed, total: list.length, failed: failed };
   }
 
   // Cosine rank over unit vectors = dot product. Returns [{ clip, score }] desc.
